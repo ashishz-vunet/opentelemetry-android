@@ -4,6 +4,10 @@ public abstract interface class io/opentelemetry/android/instrumentation/Android
 	public fun uninstall (Lio/opentelemetry/android/instrumentation/InstallationContext;)V
 }
 
+public abstract interface class io/opentelemetry/android/instrumentation/ConfigurableHybridClickInstrumentation {
+	public abstract fun setActiveContextWindowMillis (J)V
+}
+
 public final class io/opentelemetry/android/instrumentation/InstallationContext {
 	public fun <init> (Landroid/content/Context;Lio/opentelemetry/api/OpenTelemetry;Lio/opentelemetry/android/session/SessionProvider;Lio/opentelemetry/sdk/common/Clock;)V
 	public final fun getApplication ()Landroid/app/Application;
