@@ -16,4 +16,3 @@ public final class io/opentelemetry/android/instrumentation/InstallationContext 
 	public final fun getOpenTelemetry ()Lio/opentelemetry/api/OpenTelemetry;
 	public final fun getSessionProvider ()Lio/opentelemetry/android/session/SessionProvider;
 }
-
