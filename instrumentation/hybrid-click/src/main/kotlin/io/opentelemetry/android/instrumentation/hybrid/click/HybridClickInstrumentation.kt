@@ -5,6 +5,7 @@
 
 package io.opentelemetry.android.instrumentation.hybrid.click
 
+import android.app.Application
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.ConfigurableHybridClickInstrumentation
@@ -20,26 +21,41 @@ import io.opentelemetry.android.instrumentation.InstallationContext
 class HybridClickInstrumentation : AndroidInstrumentation, ConfigurableHybridClickInstrumentation {
     override val name: String = "hybrid.click"
     private var activeContextWindowMillis: Long = DEFAULT_ACTIVE_CONTEXT_WINDOW_MILLIS
+    private var activityLifecycleCallback: Application.ActivityLifecycleCallbacks? = null
 
     /**
      * Creates the tracer used for hybrid click spans and registers lifecycle callbacks that
      * attach/detach per-window touch interception as activities resume/pause.
      */
     override fun install(ctx: InstallationContext) {
+        if (activityLifecycleCallback != null) {
+            return
+        }
+
         val tracer =
             ctx.openTelemetry
                 .tracerProvider
                 .tracerBuilder("io.opentelemetry.android.instrumentation.hybrid.click")
                 .build()
 
-        ctx.application?.registerActivityLifecycleCallbacks(
-            HybridClickActivityCallback(
-                HybridClickEventGenerator(
-                    tracer = tracer,
-                    activeContextWindowMillis = activeContextWindowMillis,
-                ),
-            ),
-        )
+        ctx.application?.let { application ->
+            val callback =
+                HybridClickActivityCallback(
+                    HybridClickEventGenerator(
+                        tracer = tracer,
+                        activeContextWindowMillis = activeContextWindowMillis,
+                    ),
+                )
+            activityLifecycleCallback = callback
+            application.registerActivityLifecycleCallbacks(callback)
+        }
+    }
+
+    override fun uninstall(ctx: InstallationContext) {
+        activityLifecycleCallback?.let { callback ->
+            ctx.application?.unregisterActivityLifecycleCallbacks(callback)
+        }
+        activityLifecycleCallback = null
     }
 
     override fun setActiveContextWindowMillis(value: Long) {
