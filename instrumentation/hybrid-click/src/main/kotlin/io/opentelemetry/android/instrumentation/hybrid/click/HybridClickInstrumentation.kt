@@ -6,10 +6,11 @@
 package io.opentelemetry.android.instrumentation.hybrid.click
 
 import android.app.Application
+import android.content.Context
 import com.google.auto.service.AutoService
+import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.ConfigurableHybridClickInstrumentation
-import io.opentelemetry.android.instrumentation.InstallationContext
 
 @AutoService(AndroidInstrumentation::class)
 /**
@@ -27,18 +28,21 @@ class HybridClickInstrumentation : AndroidInstrumentation, ConfigurableHybridCli
      * Creates the tracer used for hybrid click spans and registers lifecycle callbacks that
      * attach/detach per-window touch interception as activities resume/pause.
      */
-    override fun install(ctx: InstallationContext) {
+    override fun install(
+        context: Context,
+        openTelemetryRum: OpenTelemetryRum,
+    ) {
         if (activityLifecycleCallback != null) {
             return
         }
 
         val tracer =
-            ctx.openTelemetry
+            openTelemetryRum.openTelemetry
                 .tracerProvider
                 .tracerBuilder("io.opentelemetry.android.instrumentation.hybrid.click")
                 .build()
 
-        ctx.application?.let { application ->
+        (context as? Application)?.let { application ->
             val callback =
                 HybridClickActivityCallback(
                     HybridClickEventGenerator(
@@ -51,13 +55,19 @@ class HybridClickInstrumentation : AndroidInstrumentation, ConfigurableHybridCli
         }
     }
 
-    override fun uninstall(ctx: InstallationContext) {
+    override fun uninstall(
+        context: Context,
+        openTelemetryRum: OpenTelemetryRum,
+    ) {
         activityLifecycleCallback?.let { callback ->
-            ctx.application?.unregisterActivityLifecycleCallbacks(callback)
+            (context as? Application)?.unregisterActivityLifecycleCallbacks(callback)
         }
         activityLifecycleCallback = null
     }
 
+    /**
+     * Configures how long the click span stays active to correlate downstream async work.
+     */
     override fun setActiveContextWindowMillis(value: Long) {
         activeContextWindowMillis = value
     }
@@ -66,4 +76,3 @@ class HybridClickInstrumentation : AndroidInstrumentation, ConfigurableHybridCli
         const val DEFAULT_ACTIVE_CONTEXT_WINDOW_MILLIS = 500L
     }
 }
-

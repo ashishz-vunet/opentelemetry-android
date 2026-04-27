@@ -8,6 +8,7 @@ package io.opentelemetry.android.instrumentation.hybrid.click
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.Window
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.semconv.incubating.AppIncubatingAttributes.APP_SCREEN_COORDINATE_X
@@ -16,6 +17,9 @@ import io.opentelemetry.semconv.incubating.AppIncubatingAttributes.APP_WIDGET_ID
 import io.opentelemetry.semconv.incubating.AppIncubatingAttributes.APP_WIDGET_NAME
 import java.lang.ref.WeakReference
 
+/**
+ * Generates `ui.click` spans for qualified tap gestures in hybrid View/Compose screens.
+ */
 internal class HybridClickEventGenerator(
     private val tracer: Tracer,
     private val viewTapTargetDetector: HybridViewTapTargetDetector = HybridViewTapTargetDetector(),
@@ -23,6 +27,7 @@ internal class HybridClickEventGenerator(
 ) {
     private var windowRef: WeakReference<Window>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val tapGestureClassifier = HybridTapGestureClassifier()
 
     private val composeTapTargetDetector: HybridComposeTapTargetDetector? by lazy {
         if (!isComposeAvailable()) {
@@ -43,6 +48,7 @@ internal class HybridClickEventGenerator(
      */
     fun startTracking(window: Window) {
         windowRef = WeakReference(window)
+        tapGestureClassifier.touchSlopPx = ViewConfiguration.get(window.decorView.context).scaledTouchSlop.toFloat()
         val currentCallback = window.callback
         if (currentCallback is WindowCallbackWrapper) {
             return
@@ -59,13 +65,14 @@ internal class HybridClickEventGenerator(
      */
     fun generateClick(motionEvent: MotionEvent?) {
         val window = windowRef?.get() ?: return
-        if (motionEvent == null || motionEvent.actionMasked != MotionEvent.ACTION_UP) {
+        val event = motionEvent ?: return
+        if (!tapGestureClassifier.shouldEmitClick(event)) {
             return
         }
 
         val target =
-            composeTapTargetDetector?.findTapTarget(window.decorView, motionEvent.x, motionEvent.y)
-                ?: viewTapTargetDetector.findTapTarget(window.decorView, motionEvent.x, motionEvent.y)
+            composeTapTargetDetector?.findTapTarget(window.decorView, event.x, event.y)
+                ?: viewTapTargetDetector.findTapTarget(window.decorView, event.x, event.y)
                 ?: return
 
         val span =
@@ -97,9 +104,13 @@ internal class HybridClickEventGenerator(
                 callback = (callback as WindowCallbackWrapper).unwrap()
             }
         }
+        tapGestureClassifier.reset()
         windowRef = null
     }
 
+    /**
+     * Performs a safe runtime check so this module can run in apps without Compose on classpath.
+     */
     private fun isComposeAvailable(): Boolean =
         try {
             Class.forName(COMPOSE_VIEW_CLASS_NAME)

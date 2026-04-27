@@ -8,9 +8,10 @@ package io.opentelemetry.android.agent.dsl.instrumentation
 import io.opentelemetry.android.agent.FakeClock
 import io.opentelemetry.android.agent.FakeInstrumentationLoader
 import io.opentelemetry.android.agent.dsl.OpenTelemetryConfiguration
+import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.ConfigurableHybridClickInstrumentation
-import io.opentelemetry.android.instrumentation.InstallationContext
+import android.content.Context
 import org.junit.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -90,7 +91,10 @@ private class FakeHybridClickInstrumentation : AndroidInstrumentation, Configura
 
     override val name: String = "hybrid.click"
 
-    override fun install(ctx: InstallationContext) {}
+    override fun install(
+        context: Context,
+        openTelemetryRum: OpenTelemetryRum,
+    ) {}
 
     override fun setActiveContextWindowMillis(value: Long) {
         activeContextWindowMillis = value

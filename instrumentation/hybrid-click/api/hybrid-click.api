@@ -2,7 +2,8 @@ public final class io/opentelemetry/android/instrumentation/hybrid/click/HybridC
 	public static final field DEFAULT_ACTIVE_CONTEXT_WINDOW_MILLIS J
 	public fun <init> ()V
 	public fun getName ()Ljava/lang/String;
-	public fun install (Lio/opentelemetry/android/instrumentation/InstallationContext;)V
+	public fun install (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
 	public fun setActiveContextWindowMillis (J)V
+	public fun uninstall (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
 }
 
