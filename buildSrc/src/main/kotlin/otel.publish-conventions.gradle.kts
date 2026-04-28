@@ -1,9 +1,26 @@
 import com.android.build.api.dsl.LibraryExtension
+import java.util.Properties
 
 plugins {
     id("maven-publish")
     id("signing")
 }
+
+val publishTarget = (findProperty("publishTarget") as String?)?.lowercase() ?: "github"
+require(publishTarget in setOf("github", "sonatype", "none")) {
+    "Invalid publishTarget '$publishTarget'. Expected one of: github, sonatype, none."
+}
+
+val githubOwner = (findProperty("github.packages.owner") as String?) ?: System.getenv("GITHUB_REPOSITORY_OWNER")
+val githubRepo = (findProperty("github.packages.repo") as String?) ?: System.getenv("GITHUB_REPOSITORY")?.substringAfter("/")
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        localFile.inputStream().use(::load)
+    }
+}
+val localGprUser = localProperties.getProperty("gpr.user")
+val localGprKey = localProperties.getProperty("gpr.key")
 
 // If this module is not marked as stable (the default state) then append "-alpha" to its version.
 // ---
@@ -18,6 +35,11 @@ if (findProperty("otel.stable") != "true") {
 // For example: "./gradlew publishToMavenLocal -Pfinal=true".
 if (findProperty("final") != "true") {
     version = "$version-SNAPSHOT"
+}
+
+val versionSuffix = findProperty("otel.version.suffix") as String?
+if (!versionSuffix.isNullOrBlank()) {
+    version = "$version-$versionSuffix"
 }
 
 // When isARelease is `false`, only the main deliverable is generated (.aar/.jar file) and is not signed.
@@ -48,53 +70,78 @@ if (android != null) {
 }
 
 afterEvaluate {
-    publishing.publications {
-        val maven = create<MavenPublication>("maven") {
-            val path = project.path
-            artifactId = computeArtifactId(path)
-            groupId = computeGroupId(path)
-            if (android != null) {
-                from(components.findByName(androidVariantToRelease))
-            } else {
-                val javaComponent =
-                    components.findByName("java") ?: components.findByName("javaPlatform")
-                javaComponent?.let {
-                    from(it)
-                }
+    publishing {
+        if (publishTarget == "github") {
+            check(!githubOwner.isNullOrBlank()) {
+                "github.packages.owner is required when publishTarget=github."
             }
-            pom {
-                val repoUrl = "https://github.com/open-telemetry/opentelemetry-android"
-                name.set("OpenTelemetry Android")
-                description.set(project.description)
-                url.set(repoUrl)
-                licenses {
-                    license {
-                        name.set("The Apache Software License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                    }
-                }
-                scm {
-                    val scmUrl = "scm:git:git@github.com:open-telemetry/opentelemetry-android.git"
-                    connection.set(scmUrl)
-                    developerConnection.set(scmUrl)
-                    url.set(repoUrl)
-                    tag.set("HEAD")
-                }
-                developers {
-                    developer {
-                        id.set("opentelemetry")
-                        name.set("OpenTelemetry")
-                        url.set("https://github.com/open-telemetry/community")
+            check(!githubRepo.isNullOrBlank()) {
+                "github.packages.repo is required when publishTarget=github."
+            }
+            repositories {
+                maven {
+                    name = "GitHubPackages"
+                    url = uri("https://maven.pkg.github.com/$githubOwner/$githubRepo")
+                    credentials {
+                        username = (findProperty("gpr.user") as String?)
+                            ?: localGprUser
+                            ?: System.getenv("GITHUB_ACTOR")
+                        password = (findProperty("gpr.key") as String?)
+                            ?: localGprKey
+                            ?: System.getenv("GITHUB_TOKEN")
                     }
                 }
             }
         }
 
-        // Signing only during a release.
-        if (isARelease) {
-            signing {
-                useInMemoryPgpKeys(System.getenv("GPG_PRIVATE_KEY"), System.getenv("GPG_PASSWORD"))
-                sign(maven)
+        publications {
+            val maven = create<MavenPublication>("maven") {
+                val path = project.path
+                artifactId = computeArtifactId(path)
+                groupId = computeGroupId(path)
+                if (android != null) {
+                    from(components.findByName(androidVariantToRelease))
+                } else {
+                    val javaComponent =
+                        components.findByName("java") ?: components.findByName("javaPlatform")
+                    javaComponent?.let {
+                        from(it)
+                    }
+                }
+                pom {
+                    val repoUrl = "https://github.com/open-telemetry/opentelemetry-android"
+                    name.set("OpenTelemetry Android")
+                    description.set(project.description)
+                    url.set(repoUrl)
+                    licenses {
+                        license {
+                            name.set("The Apache Software License, Version 2.0")
+                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    scm {
+                        val scmUrl = "scm:git:git@github.com:open-telemetry/opentelemetry-android.git"
+                        connection.set(scmUrl)
+                        developerConnection.set(scmUrl)
+                        url.set(repoUrl)
+                        tag.set("HEAD")
+                    }
+                    developers {
+                        developer {
+                            id.set("opentelemetry")
+                            name.set("OpenTelemetry")
+                            url.set("https://github.com/open-telemetry/community")
+                        }
+                    }
+                }
+            }
+
+            // Signing only during a release to Sonatype.
+            if (isARelease && publishTarget == "sonatype") {
+                signing {
+                    useInMemoryPgpKeys(System.getenv("GPG_PRIVATE_KEY"), System.getenv("GPG_PASSWORD"))
+                    sign(maven)
+                }
             }
         }
     }
