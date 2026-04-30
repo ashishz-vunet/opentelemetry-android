@@ -29,4 +29,7 @@ dependencies {
     implementation(libs.opentelemetry.semconv.incubating)
 
     testImplementation(project(":test-common"))
+    testImplementation(libs.compose)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

@@ -44,8 +44,8 @@ class HybridClickInstrumentation : AndroidInstrumentation, ConfigurableHybridCli
 
         (context as? Application)?.let { application ->
             val callback =
-                HybridClickActivityCallback(
-                    HybridClickEventGenerator(
+                ClickActivityCallback(
+                    ClickEventGenerator(
                         tracer = tracer,
                         activeContextWindowMillis = activeContextWindowMillis,
                     ),
