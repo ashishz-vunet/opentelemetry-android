@@ -29,6 +29,33 @@ This module is **internal implementation detail** and is **not intended for dire
   - `navigation-compose-nav3`
 - `navigation-common` is pulled transitively by those modules.
 
+## Using navigation modules together
+
+Choose instrumentation modules based on navigation stacks used in the app:
+
+- View-only apps: add `navigation-view`
+- Compose Nav2 apps: add `navigation-compose-nav2`
+- Compose Nav3 apps: add `navigation-compose-nav3`
+- Hybrid apps (View + Compose): add both relevant modules together
+
+Example combinations:
+
+```kotlin
+// View + Compose Nav2
+implementation("io.opentelemetry.android.instrumentation:navigation-view:<version>")
+implementation("io.opentelemetry.android.instrumentation:navigation-compose-nav2:<version>")
+
+// View + Compose Nav3
+implementation("io.opentelemetry.android.instrumentation:navigation-view:<version>")
+implementation("io.opentelemetry.android.instrumentation:navigation-compose-nav3:<version>")
+
+// Compose Nav2 + Nav3 (during migration)
+implementation("io.opentelemetry.android.instrumentation:navigation-compose-nav2:<version>")
+implementation("io.opentelemetry.android.instrumentation:navigation-compose-nav3:<version>")
+```
+
+You still configure the main OpenTelemetry Android SDK once. Each added navigation instrumentation module auto-registers itself and contributes spans when used by the app.
+
 ## Why this split exists
 
 View-based and Compose-based navigation can coexist in one app. By sharing constants, emitter, and models in this module, all navigation instrumentations emit a consistent `ui.navigation` schema.
