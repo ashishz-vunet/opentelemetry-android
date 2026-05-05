@@ -6,6 +6,8 @@
 package io.opentelemetry.android.instrumentation.navigation.view
 
 import android.content.Intent
+import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationEntryType
+import io.opentelemetry.android.instrumentation.navigation.view.models.resolveEntryType
 import io.mockk.every
 import io.mockk.mockk
 import org.assertj.core.api.Assertions.assertThat
@@ -36,6 +38,26 @@ class ViewNavigationModelsTest {
             every { data } returns null
             every { action } returns Intent.ACTION_MAIN
         }
+        assertThat(resolveEntryType(intent)).isEqualTo(NavigationEntryType.INTERNAL)
+    }
+
+    @Test
+    fun does_not_resolve_deep_link_when_action_view_has_no_data() {
+        val intent =
+            mockk<Intent> {
+                every { data } returns null
+                every { action } returns Intent.ACTION_VIEW
+            }
+        assertThat(resolveEntryType(intent)).isEqualTo(NavigationEntryType.EXTERNAL)
+    }
+
+    @Test
+    fun does_not_resolve_deep_link_for_data_without_action_view() {
+        val intent =
+            mockk<Intent> {
+                every { data } returns mockk()
+                every { action } returns Intent.ACTION_MAIN
+            }
         assertThat(resolveEntryType(intent)).isEqualTo(NavigationEntryType.INTERNAL)
     }
 }

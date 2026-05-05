@@ -8,15 +8,15 @@ package io.opentelemetry.android.instrumentation.navigation.view
 import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.api.trace.Tracer
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_ACTION_KEY
+import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY
 import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_DESTINATION_NAME_KEY
 import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_DESTINATION_TYPE_KEY
 import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_ENTRY_TYPE_KEY
 import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_SOURCE_NAME_KEY
 import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_SOURCE_TYPE_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_TIMESTAMP_MS_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_TRIGGER_KEY
+import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_TIMESTAMP_NS_KEY
 import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.SPAN_NAME
+import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationTransitionCandidate
 
 internal class ViewNavigationSpanEmitter(
     private val tracer: Tracer,
@@ -27,10 +27,9 @@ internal class ViewNavigationSpanEmitter(
                 .spanBuilder(SPAN_NAME)
                 .setAttribute(NAVIGATION_DESTINATION_TYPE_KEY, candidate.destination.type.name.lowercase())
                 .setAttribute(NAVIGATION_DESTINATION_NAME_KEY, candidate.destination.name)
-                .setAttribute(NAVIGATION_ACTION_KEY, candidate.action.value)
+                .setAttribute(NAVIGATION_TRANSITION_TYPE_KEY, candidate.transitionType.value)
                 .setAttribute(NAVIGATION_ENTRY_TYPE_KEY, candidate.entryType.value)
-                .setAttribute(NAVIGATION_TRIGGER_KEY, candidate.trigger.value)
-                .setAttribute(NAVIGATION_TIMESTAMP_MS_KEY, candidate.timestampMillis)
+                .setAttribute(NAVIGATION_TIMESTAMP_NS_KEY, candidate.timestampNanos)
 
         candidate.source?.let {
             spanBuilder

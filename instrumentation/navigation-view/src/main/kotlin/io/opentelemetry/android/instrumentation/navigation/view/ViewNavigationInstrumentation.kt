@@ -37,6 +37,7 @@ class ViewNavigationInstrumentation : AndroidInstrumentation {
     ) {
         val callback = activityLifecycleCallbacks ?: return
         (context as? Application)?.unregisterActivityLifecycleCallbacks(callback)
+        (callback as? ViewNavigationCollector)?.cleanup()
         activityLifecycleCallbacks = null
     }
 }

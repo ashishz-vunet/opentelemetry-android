@@ -25,14 +25,12 @@ internal object ViewNavigationConstants {
         AttributeKey.stringKey("navigation.destination.name")
 
     @JvmField
-    val NAVIGATION_ACTION_KEY: AttributeKey<String> = AttributeKey.stringKey("navigation.action")
+    val NAVIGATION_TRANSITION_TYPE_KEY: AttributeKey<String> =
+        AttributeKey.stringKey("navigation.transition.type")
 
     @JvmField
     val NAVIGATION_ENTRY_TYPE_KEY: AttributeKey<String> = AttributeKey.stringKey("navigation.entry.type")
 
     @JvmField
-    val NAVIGATION_TRIGGER_KEY: AttributeKey<String> = AttributeKey.stringKey("navigation.trigger")
-
-    @JvmField
-    val NAVIGATION_TIMESTAMP_MS_KEY: AttributeKey<Long> = AttributeKey.longKey("navigation.timestamp_ms")
+    val NAVIGATION_TIMESTAMP_NS_KEY: AttributeKey<Long> = AttributeKey.longKey("navigation.timestamp_ns")
 }
