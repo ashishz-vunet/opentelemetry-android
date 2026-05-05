@@ -29,10 +29,13 @@ opentelemetry-platform = { module = "io.opentelemetry.instrumentation:openteleme
 opentelemetry-core-bom = { module = "io.opentelemetry:opentelemetry-bom" }
 androidx-navigation-fragment = { group = "androidx.navigation", name = "navigation-fragment", version.ref = "androidx-navigation" }
 androidx-navigation-runtime-ktx = { group = "androidx.navigation", name = "navigation-runtime-ktx", version.ref = "androidx-navigation" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "androidx-navigation" }
+androidx-navigation-testing = { group = "androidx.navigation", name = "navigation-testing", version.ref = "androidx-navigation" }
 androidx-core = "androidx.core:core:1.18.0"
 androidx-annotation = "androidx.annotation:annotation:1.10.0"
 androidx-lifecycle-process = "androidx.lifecycle:lifecycle-process:2.9.4"
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref="fragment" }
+androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "compose" }
 
 findbugs-jsr305 = "com.google.code.findbugs:jsr305:3.0.2"
 byteBuddy = { module = "net.bytebuddy:byte-buddy", version.ref = "byteBuddy" }
