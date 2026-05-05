@@ -11,6 +11,7 @@ import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.common.Constants.INSTRUMENTATION_SCOPE
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationSpanEmitter
 
 @AutoService(AndroidInstrumentation::class)
 class ViewNavigationInstrumentation : AndroidInstrumentation {
@@ -26,7 +27,7 @@ class ViewNavigationInstrumentation : AndroidInstrumentation {
             return
         }
         val tracer = openTelemetryRum.openTelemetry.getTracer(INSTRUMENTATION_SCOPE)
-        val callback = ViewNavigationCollector(ViewNavigationSpanEmitter(tracer), openTelemetryRum.clock)
+        val callback = ViewNavigationCollector(NavigationSpanEmitter(tracer), openTelemetryRum.clock)
         activityLifecycleCallbacks = callback
         (context as? Application)?.registerActivityLifecycleCallbacks(callback)
     }

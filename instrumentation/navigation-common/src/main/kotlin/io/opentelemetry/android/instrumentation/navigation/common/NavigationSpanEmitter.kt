@@ -3,22 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.opentelemetry.android.instrumentation.navigation.view
+package io.opentelemetry.android.instrumentation.navigation.common
 
 import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_DESTINATION_NAME_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_DESTINATION_TYPE_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_ENTRY_TYPE_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_SOURCE_NAME_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_SOURCE_TYPE_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_TIMESTAMP_NS_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.SPAN_NAME
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationTransitionCandidate
 import io.opentelemetry.api.trace.Tracer
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_DESTINATION_NAME_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_DESTINATION_TYPE_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_ENTRY_TYPE_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_SOURCE_NAME_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_SOURCE_TYPE_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_TIMESTAMP_NS_KEY
-import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.SPAN_NAME
-import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationTransitionCandidate
 
-internal class ViewNavigationSpanEmitter(
+class NavigationSpanEmitter(
     private val tracer: Tracer,
 ) {
     fun emit(candidate: NavigationTransitionCandidate) {

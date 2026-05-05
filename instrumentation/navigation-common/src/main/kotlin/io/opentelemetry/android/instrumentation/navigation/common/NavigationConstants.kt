@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.opentelemetry.android.instrumentation.navigation.view
+package io.opentelemetry.android.instrumentation.navigation.common
 
 import io.opentelemetry.api.common.AttributeKey
 
-internal object ViewNavigationConstants {
+object NavigationConstants {
     const val SPAN_NAME: String = "ui.navigation"
 
     @JvmField

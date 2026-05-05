@@ -6,6 +6,7 @@
 package io.opentelemetry.android.instrumentation.navigation.view.models
 
 import android.content.Intent
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationEntryType
 
 /**
  * Maps an [Intent] from an Activity launch or resume to a [NavigationEntryType] for RUM.

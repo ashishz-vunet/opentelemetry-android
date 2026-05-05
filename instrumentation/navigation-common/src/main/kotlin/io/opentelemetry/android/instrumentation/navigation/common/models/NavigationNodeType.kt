@@ -3,15 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.opentelemetry.android.instrumentation.navigation.view.models
+package io.opentelemetry.android.instrumentation.navigation.common.models
 
 /**
- * Classifies which Android UI host owns the navigation destination being reported.
+ * Classifies which UI host owns the navigation destination being reported.
  */
-internal enum class NavigationNodeType {
+enum class NavigationNodeType {
     /** The destination is an [android.app.Activity] (or subclass). */
     ACTIVITY,
 
     /** The destination is an [androidx.fragment.app.Fragment] (or subclass). */
     FRAGMENT,
+
+    /** The destination is a route managed by Compose Navigation. */
+    COMPOSE_ROUTE,
 }

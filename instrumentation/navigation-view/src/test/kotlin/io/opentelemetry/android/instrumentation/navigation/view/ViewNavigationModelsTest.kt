@@ -6,7 +6,7 @@
 package io.opentelemetry.android.instrumentation.navigation.view
 
 import android.content.Intent
-import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationEntryType
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationEntryType
 import io.opentelemetry.android.instrumentation.navigation.view.models.resolveEntryType
 import io.mockk.every
 import io.mockk.mockk
