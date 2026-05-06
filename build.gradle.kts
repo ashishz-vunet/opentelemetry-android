@@ -18,6 +18,8 @@ plugins {
     id("org.jetbrains.kotlinx.kover")
 }
 
+val publishTarget = (findProperty("publishTarget") as String?)?.lowercase() ?: "github"
+
 extra["java_version"] = JavaVersion.VERSION_1_8
 extra["jvm_target"] = JvmTarget.JVM_1_8
 extra["kotlin_min_supported_version"] = KotlinVersion.KOTLIN_2_0
@@ -29,15 +31,23 @@ allprojects {
     }
 }
 
-nexusPublishing {
-    repositories {
-        // see https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#configuration
-        sonatype {
-            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
-            username.set(System.getenv("SONATYPE_USER"))
-            password.set(System.getenv("SONATYPE_KEY"))
+if (publishTarget == "sonatype") {
+    nexusPublishing {
+        repositories {
+            // see https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#configuration
+            sonatype {
+                nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+                snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+                username.set(System.getenv("SONATYPE_USER"))
+                password.set(System.getenv("SONATYPE_KEY"))
+            }
         }
+    }
+} else {
+    tasks.matching {
+        it.name.contains("Sonatype", ignoreCase = true)
+    }.configureEach {
+        enabled = false
     }
 }
 

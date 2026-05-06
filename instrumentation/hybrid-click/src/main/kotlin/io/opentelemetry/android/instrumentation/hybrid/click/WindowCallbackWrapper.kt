@@ -14,18 +14,12 @@ import android.view.SearchEvent
 import android.view.Window.Callback
 import androidx.annotation.RequiresApi
 
-/**
- * Delegating [Callback] wrapper that intercepts touch dispatch to generate hybrid click spans.
- */
 internal class WindowCallbackWrapper(
     private val callback: Callback,
-    private val hybridClickEventGenerator: HybridClickEventGenerator,
+    private val clickEventGenerator: ClickEventGenerator,
 ) : Callback by callback {
-    /**
-     * Captures touch events before delegating to the original callback.
-     */
     override fun dispatchTouchEvent(event: MotionEvent?): Boolean {
-        hybridClickEventGenerator.generateClick(event)
+        clickEventGenerator.generateClick(event)
         return callback.dispatchTouchEvent(event)
     }
 
@@ -50,9 +44,5 @@ internal class WindowCallbackWrapper(
         type: Int,
     ): ActionMode? = this.callback.onWindowStartingActionMode(callback, type)
 
-    /**
-     * Returns the original callback for restoration during teardown.
-     */
     fun unwrap(): Callback = callback
 }
-

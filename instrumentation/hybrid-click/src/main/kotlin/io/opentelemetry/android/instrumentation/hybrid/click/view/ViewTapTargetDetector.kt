@@ -3,33 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.opentelemetry.android.instrumentation.hybrid.click
+package io.opentelemetry.android.instrumentation.hybrid.click.view
 
 import android.view.View
 import android.view.ViewGroup
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.LabelResolver
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_VIEW
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTarget
 import java.util.LinkedList
 
-/**
- * Resolves tap targets from classic Android View hierarchies.
- */
-internal class HybridViewTapTargetDetector {
+internal class ViewTapTargetDetector {
     private val viewCoordinates = IntArray(2)
 
-    /**
-     * Performs a breadth-first traversal under [decorView] and returns the deepest clickable,
-     * visible View that contains the tap coordinates.
-     */
     fun findTapTarget(
         decorView: View,
         x: Float,
         y: Float,
-    ): HybridTapTarget? {
+    ): TapTarget? {
         val queue = LinkedList<View>()
         queue.addFirst(decorView)
         var target: View? = null
 
         while (queue.isNotEmpty()) {
             val view = queue.removeFirst()
+            if (isJetpackComposeView(view)) {
+                return null
+            }
+
             if (isValidClickTarget(view)) {
                 target = view
             }
@@ -40,8 +40,8 @@ internal class HybridViewTapTargetDetector {
         }
 
         val clickTarget = target ?: return null
-        return HybridTapTarget(
-            source = "view",
+        return TapTarget(
+            source = SOURCE_VIEW,
             widgetId = clickTarget.id.toString(),
             widgetName = viewToName(clickTarget),
             label = viewToLabel(clickTarget),
@@ -62,7 +62,7 @@ internal class HybridViewTapTargetDetector {
 
         for (i in 0 until view.childCount) {
             val child = view.getChildAt(i)
-            if (hitTest(child, x, y)) {
+            if (hitTest(child, x, y) && !isJetpackComposeView(child)) {
                 stack.add(child)
             }
         }
@@ -82,9 +82,6 @@ internal class HybridViewTapTargetDetector {
         return !(x < vx || x > vx + w || y < vy || y > vy + h)
     }
 
-    /**
-     * Returns a stable widget name when possible by using the resource entry name.
-     */
     private fun viewToName(view: View): String =
         try {
             view.resources?.getResourceEntryName(view.id) ?: view.id.toString()
@@ -92,13 +89,10 @@ internal class HybridViewTapTargetDetector {
             view.id.toString()
         }
 
-    /**
-     * Resolves a human-readable label for a View target with fallback ordering.
-     */
     private fun viewToLabel(view: View): String {
         val contentDescription = view.contentDescription?.toString()
         val text = (view as? android.widget.TextView)?.text?.toString()
-        return HybridLabelResolver.resolve(
+        return LabelResolver.resolve(
             contentDescription = contentDescription,
             text = text,
             className = view.javaClass.simpleName,
@@ -106,7 +100,9 @@ internal class HybridViewTapTargetDetector {
         )
     }
 
+    private fun isJetpackComposeView(view: View): Boolean =
+        view::class.java.name.startsWith("androidx.compose.ui.platform.ComposeView")
+
     private val View.isVisible: Boolean
         get() = visibility == View.VISIBLE
 }
-

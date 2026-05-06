@@ -2,6 +2,14 @@
 
 This documents describes the manual steps required to publish a release to maven central.
 
+## Fork policy
+
+For this fork, do not publish to Maven Central.
+
+- Publish fork artifacts to GitHub Packages via `.github/workflows/publish-github-packages.yml`.
+- Use `-PpublishTarget=github` for artifact publication from this repository.
+- Sonatype release flow in `.github/workflows/release.yml` is reserved for upstream and is blocked for forks.
+
 ## Release cadence
 
 This repository targets monthly minor releases from the `main` branch roughly a week after

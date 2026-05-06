@@ -5,14 +5,15 @@
 
 package io.opentelemetry.android.instrumentation.hybrid.click
 
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.LabelResolver
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
-class HybridLabelResolverTest {
+class LabelResolverTest {
     @Test
     fun resolve_prefers_content_description() {
         val label =
-            HybridLabelResolver.resolve(
+            LabelResolver.resolve(
                 contentDescription = "Pay now",
                 text = "Pay",
                 className = "android.widget.Button",
@@ -25,7 +26,7 @@ class HybridLabelResolverTest {
     @Test
     fun resolve_uses_text_when_content_description_is_blank() {
         val label =
-            HybridLabelResolver.resolve(
+            LabelResolver.resolve(
                 contentDescription = "   ",
                 text = "Continue",
                 className = "android.widget.Button",
@@ -38,7 +39,7 @@ class HybridLabelResolverTest {
     @Test
     fun resolve_uses_class_name_when_content_description_and_text_are_blank() {
         val label =
-            HybridLabelResolver.resolve(
+            LabelResolver.resolve(
                 contentDescription = null,
                 text = "",
                 className = "android.widget.ImageView",
@@ -51,7 +52,7 @@ class HybridLabelResolverTest {
     @Test
     fun resolve_uses_fallback_when_all_values_are_blank() {
         val label =
-            HybridLabelResolver.resolve(
+            LabelResolver.resolve(
                 contentDescription = null,
                 text = null,
                 className = " ",
@@ -61,4 +62,3 @@ class HybridLabelResolverTest {
         assertThat(label).isEqualTo("semantics-id")
     }
 }
-
