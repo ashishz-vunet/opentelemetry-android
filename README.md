@@ -122,7 +122,9 @@ The following instrumentation modules are bundled with the Android Agent:
 
 There are also other
 [additional instrumentation modules](https://github.com/open-telemetry/opentelemetry-android/tree/main/instrumentation)
-that application developers can include through a gradle dependency. 
+that application developers can include through a gradle dependency.
+For hybrid apps, see [Hybrid click](./instrumentation/hybrid-click/) to capture both
+View and Jetpack Compose click interactions as a standalone module.
 Instrumentations are detected at runtime via the classpath, and
 are installed automatically.
 
@@ -133,6 +135,7 @@ See the following pages for details about the related topics:
 - [Kotlin-First Policy](./docs/KOTLIN_FIRST.md)
 - [StrictMode Guidance](./docs/STRICTMODE.md)
 - [Exporter Management](./docs/EXPORTER_CHAIN.md)
+- [Fork publishing and consumption](./docs/FORK_GITHUB_PACKAGES.md)
 
 # Contributing
 

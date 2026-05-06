@@ -15,6 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
+          if [[ "${{ github.repository_owner }}" != "open-telemetry" ]]; then
+            echo "Sonatype release workflow is disabled for forks."
+            exit 1
+          fi
+      - run: |
           if [[ $GITHUB_REF_NAME != release/* ]]; then
             echo This workflow can only be run against release branches
             exit 1

@@ -35,6 +35,9 @@ class InstrumentationConfiguration internal constructor(
     private val screenOrientation: ScreenOrientationConfiguration by lazy {
         ScreenOrientationConfiguration(config, instrumentationLoader)
     }
+    private val hybridClick: HybridClickConfiguration by lazy {
+        HybridClickConfiguration(config, instrumentationLoader)
+    }
 
     /**
      * Configures activity lifecycle instrumentation.
@@ -83,5 +86,12 @@ class InstrumentationConfiguration internal constructor(
      */
     fun screenOrientation(configure: ScreenOrientationConfiguration.() -> Unit) {
         screenOrientation.configure()
+    }
+
+    /**
+     * Configures hybrid click instrumentation.
+     */
+    fun hybridClick(configure: HybridClickConfiguration.() -> Unit) {
+        hybridClick.configure()
     }
 }
