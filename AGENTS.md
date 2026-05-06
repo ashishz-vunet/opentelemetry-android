@@ -43,8 +43,8 @@ Key points:
   set of default instrumentations (listed under `// Default instrumentations:` in
   `android-agent/build.gradle.kts`) and provides a Kotlin DSL for configuration. Other modules
   under `instrumentation/*` are **opt-in** unless added there explicitly — for example
-  **`instrumentation/navigation-view`** (view-based Activity/Fragment **`ui.navigation`** spans),
-  **`instrumentation/view-click`**, **`instrumentation/compose/click`**, and the separate **agent**
+  **`instrumentation/navigation-view`**, **`instrumentation/navigation-compose-nav2`**, **`instrumentation/navigation-compose-nav3`** (navigation spans),
+  **`instrumentation/view-click`**, **`instrumentation/compose/click`**, **`instrumentation/hybrid-click`**, and the separate **agent**
   artifacts for okhttp3, httpurlconnection, and android-log. Add the dependency you need when
   integrating with `core` only, or when extending the agent’s classpath.
 - **`core`** configures the OTel Java SDK (TracerProvider, MeterProvider, LoggerProvider).
@@ -111,6 +111,7 @@ Any change to the public API surface is detected by `apiCheck` and requires extr
 - Use **JUnit 5** (Jupiter) for unit tests.
 - Use **Robolectric** when Android framework classes are needed. Robolectric tests must use
   **JUnit 4** since Robolectric is not compatible with JUnit 5.
+- **Bytecode Weaving Tests**: For instrumentations that require bytecode weaving (e.g. okhttp3), validate changes via Android instrumented tests placed in a separate `testing` module within the instrumentation directory, as Robolectric does not support library bytecode weaving yet.
 - Use **MockK** (not Mockito) for mocking.
 - Use **AssertJ** for assertions (`assertThat(...).isEqualTo(...)`, not `assertEquals`).
 - Tests must pass: `./gradlew check`.
