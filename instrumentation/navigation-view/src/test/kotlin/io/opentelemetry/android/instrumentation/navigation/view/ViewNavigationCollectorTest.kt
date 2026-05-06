@@ -8,12 +8,15 @@ package io.opentelemetry.android.instrumentation.navigation.view
 import android.app.Activity
 import android.app.Application
 import android.content.Intent
+import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentManager
 import io.mockk.MockKAnnotations
+import io.mockk.Runs
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -21,6 +24,8 @@ import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.android.instrumentation.common.ScreenNameExtractor
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationSpanEmitter
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.common.Clock
@@ -78,7 +83,7 @@ class ViewNavigationCollectorTest {
         assertThat(spans).hasSize(2)
         assertThat(spans[1].attributes.get(SCREEN_NAME_KEY)).isEqualTo("DetailsActivity")
         assertThat(spans[1].attributes.get(LAST_SCREEN_NAME_KEY)).isEqualTo("HomeActivity")
-        assertThat(spans[1].attributes.get(ViewNavigationConstants.NAVIGATION_ACTION_KEY)).isEqualTo("push")
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("push")
     }
 
     @Test
@@ -111,7 +116,7 @@ class ViewNavigationCollectorTest {
 
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(3)
-        assertThat(spans[2].attributes.get(ViewNavigationConstants.NAVIGATION_ACTION_KEY)).isEqualTo("replace")
+        assertThat(spans[2].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
         assertThat(spans[2].attributes.get(SCREEN_NAME_KEY)).isEqualTo("DetailsFragment")
         assertThat(spans[2].attributes.get(LAST_SCREEN_NAME_KEY)).isEqualTo("HomeFragment")
     }
@@ -132,9 +137,187 @@ class ViewNavigationCollectorTest {
         verify(exactly = 1) { application.unregisterActivityLifecycleCallbacks(any()) }
     }
 
+    @Test
+    fun emits_pop_when_activity_finishes() {
+        val first = mockActivity()
+        val second = mockActivity()
+        every { first.isFinishing } returns true
+
+        val collector = createCollector(mapOf(first to "HomeActivity", second to "DetailsActivity"))
+
+        collector.onActivityResumed(first)
+        collector.onActivityPaused(first)
+        collector.onActivityResumed(second)
+
+        val spans = exporter.finishedSpanItems
+        assertThat(spans).hasSize(2)
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("pop")
+    }
+
+    @Test
+    fun does_not_misclassify_replace_with_addToBackStack() {
+        every { fragmentActivity.supportFragmentManager } returns fragmentManager
+        every { fragmentManager.backStackEntryCount } returnsMany listOf(0, 0, 1)
+        every { fragmentActivity.intent } returns mainIntent()
+
+        val first = mockFragment("HomeFragment")
+        val second = mockFragment("DetailsFragment")
+
+        val collector =
+            createCollector(
+                mapOf(
+                    fragmentActivity to "HostActivity",
+                    first to "HomeFragment",
+                    second to "DetailsFragment",
+                ),
+            )
+
+        collector.onActivityCreated(fragmentActivity, null)
+        collector.onActivityResumed(fragmentActivity)
+
+        val lifecycleSlot = slot<FragmentManager.FragmentLifecycleCallbacks>()
+        verify { fragmentManager.registerFragmentLifecycleCallbacks(capture(lifecycleSlot), true) }
+        lifecycleSlot.captured.onFragmentResumed(fragmentManager, first)
+
+        every { first.isRemoving } returns true
+        every { fragmentManager.isStateSaved } returns false
+        lifecycleSlot.captured.onFragmentDestroyed(fragmentManager, first)
+
+        lifecycleSlot.captured.onFragmentResumed(fragmentManager, second)
+
+        val spans = exporter.finishedSpanItems
+        assertThat(spans).hasSize(3)
+        assertThat(spans[2].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
+    }
+
+    @Test
+    fun emits_pop_for_fragment_when_backstack_shrinks() {
+        every { fragmentActivity.supportFragmentManager } returns fragmentManager
+        every { fragmentManager.backStackEntryCount } returnsMany listOf(0, 1, 2, 1)
+        every { fragmentActivity.intent } returns mainIntent()
+
+        val home = mockFragment("HomeFragment")
+        val details = mockFragment("DetailsFragment")
+
+        val collector =
+            createCollector(
+                mapOf(
+                    fragmentActivity to "HostActivity",
+                    home to "HomeFragment",
+                    details to "DetailsFragment",
+                ),
+            )
+        collector.onActivityCreated(fragmentActivity, null)
+        collector.onActivityResumed(fragmentActivity)
+
+        val lifecycleSlot = slot<FragmentManager.FragmentLifecycleCallbacks>()
+        verify { fragmentManager.registerFragmentLifecycleCallbacks(capture(lifecycleSlot), true) }
+
+        lifecycleSlot.captured.onFragmentResumed(fragmentManager, home)
+        lifecycleSlot.captured.onFragmentResumed(fragmentManager, details)
+        lifecycleSlot.captured.onFragmentResumed(fragmentManager, home)
+
+        val spans = exporter.finishedSpanItems
+        assertThat(spans).hasSize(4)
+        assertThat(spans[3].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("pop")
+    }
+
+    @Test
+    fun does_not_track_dialog_fragment_as_navigation() {
+        every { fragmentActivity.supportFragmentManager } returns fragmentManager
+        every { fragmentManager.backStackEntryCount } returns 0
+        every { fragmentActivity.intent } returns mainIntent()
+
+        val dialog =
+            mockk<DialogFragment>(relaxed = true) {
+                every { isVisible } returns true
+                every { parentFragment } returns null
+            }
+
+        val collector =
+            createCollector(
+                mapOf(fragmentActivity to "HostActivity", dialog to "MyDialog"),
+            )
+        collector.onActivityCreated(fragmentActivity, null)
+        collector.onActivityResumed(fragmentActivity)
+
+        val lifecycleSlot = slot<FragmentManager.FragmentLifecycleCallbacks>()
+        verify { fragmentManager.registerFragmentLifecycleCallbacks(capture(lifecycleSlot), true) }
+        lifecycleSlot.captured.onFragmentResumed(fragmentManager, dialog)
+
+        assertThat(exporter.finishedSpanItems).hasSize(1)
+    }
+
+    @Test
+    fun entry_type_only_applies_on_first_resume_per_activity() {
+        val deepLinkIntent: Intent =
+            mockk {
+                every { data } returns mockk()
+                every { action } returns Intent.ACTION_VIEW
+            }
+        val home = mockActivity(deepLinkIntent)
+        val details = mockActivity()
+
+        val collector = createCollector(mapOf(home to "HomeActivity", details to "DetailsActivity"))
+
+        collector.onActivityResumed(home)
+        collector.onActivityPaused(home)
+        collector.onActivityResumed(details)
+        every { details.isFinishing } returns true
+        collector.onActivityPaused(details)
+        collector.onActivityResumed(home)
+
+        val spans = exporter.finishedSpanItems
+        assertThat(spans).hasSize(3)
+        assertThat(spans[0].attributes.get(NavigationConstants.NAVIGATION_ENTRY_TYPE_KEY)).isEqualTo("deep_link")
+        assertThat(spans[2].attributes.get(NavigationConstants.NAVIGATION_ENTRY_TYPE_KEY)).isEqualTo("internal")
+    }
+
+    @Test
+    fun uninstall_unregisters_fragment_callbacks() {
+        val instrumentation = ViewNavigationInstrumentation()
+        val openTelemetryRum =
+            mockk<OpenTelemetryRum> {
+                every { openTelemetry } returns this@ViewNavigationCollectorTest.openTelemetry
+                every { clock } returns testClock
+            }
+        every { fragmentActivity.supportFragmentManager } returns fragmentManager
+        every { fragmentActivity.intent } returns mainIntent()
+
+        val callbackSlot = slot<Application.ActivityLifecycleCallbacks>()
+        every { application.registerActivityLifecycleCallbacks(capture(callbackSlot)) } just Runs
+        every { application.unregisterActivityLifecycleCallbacks(any()) } just Runs
+
+        instrumentation.install(application, openTelemetryRum)
+        callbackSlot.captured.onActivityCreated(fragmentActivity, null)
+
+        instrumentation.uninstall(application, openTelemetryRum)
+
+        verify { fragmentManager.unregisterFragmentLifecycleCallbacks(any()) }
+    }
+
+    @Test
+    fun recreate_on_rotation_emits_no_duplicate() {
+        val before = mockActivity()
+        val after = mockActivity()
+
+        val collector =
+            createCollector(
+                mapOf(before to "HomeActivity", after to "HomeActivity"),
+            )
+
+        collector.onActivityResumed(before)
+        collector.onActivityPaused(before)
+        collector.onActivityDestroyed(before)
+        collector.onActivityCreated(after, null)
+        collector.onActivityResumed(after)
+
+        assertThat(exporter.finishedSpanItems).hasSize(1)
+    }
+
     private fun createCollector(nameMap: Map<Any, String>): ViewNavigationCollector {
         val screenNameExtractor = ScreenNameExtractor { instance -> nameMap[instance] ?: instance::class.java.simpleName }
-        val emitter = ViewNavigationSpanEmitter(openTelemetry.getTracer("test-navigation-view"))
+        val emitter = NavigationSpanEmitter(openTelemetry.getTracer("test-navigation-view"))
         return ViewNavigationCollector(emitter, testClock, screenNameExtractor)
     }
 
@@ -151,4 +334,10 @@ class ViewNavigationCollectorTest {
             every { data } returns null
             every { action } returns Intent.ACTION_MAIN
         }
+
+    private fun mockActivity(intent: Intent = mainIntent()): Activity {
+        val activity = mockk<Activity>(relaxed = true)
+        every { activity.intent } returns intent
+        return activity
+    }
 }

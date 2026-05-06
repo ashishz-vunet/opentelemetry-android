@@ -36,7 +36,7 @@ For CI in the SDK repository, use a token that can read packages from
 
 ## Android Studio local setup
 
-Add credentials in `~/.gradle/gradle.properties`:
+Add credentials in `~/local.properties`:
 
 ```properties
 gpr.user=<your-github-username>
