@@ -86,7 +86,8 @@ internal class ViewNavigationCollector(
         val entryType =
             if (isFirstResume) resolveEntryType(activity.intent) else NavigationEntryType.INTERNAL
 
-        val destination = NavigationNode(NavigationNodeType.ACTIVITY, screenNameExtractor.extract(activity))
+        val destination =
+            NavigationNode(NavigationNodeType.ACTIVITY, screenNameExtractor.extract(activity))
         emitTransitionIfNeeded(
             destination = destination,
             transitionType = if (isPop) NavigationTransitionType.POP else NavigationTransitionType.PUSH,
@@ -174,7 +175,8 @@ internal class ViewNavigationCollector(
                 }
 
                 emitTransitionIfNeeded(
-                    destination = NavigationNode(NavigationNodeType.FRAGMENT, screenNameExtractor.extract(f)),
+                    destination =
+                        NavigationNode(NavigationNodeType.FRAGMENT, screenNameExtractor.extract(f)),
                     transitionType = inferFragmentTransitionType(fm),
                     entryType = NavigationEntryType.INTERNAL,
                 )
@@ -191,7 +193,8 @@ internal class ViewNavigationCollector(
      * destroy the previous Fragment, which would otherwise be misclassified as a back navigation.
      */
     private fun inferFragmentTransitionType(fragmentManager: FragmentManager): NavigationTransitionType {
-        val previousCount = backstackCountByManager[fragmentManager] ?: fragmentManager.backStackEntryCount
+        val previousCount =
+            backstackCountByManager[fragmentManager] ?: fragmentManager.backStackEntryCount
         val currentCount = fragmentManager.backStackEntryCount
         backstackCountByManager[fragmentManager] = currentCount
 

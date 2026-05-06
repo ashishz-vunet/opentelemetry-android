@@ -6,13 +6,14 @@
 package io.opentelemetry.android.instrumentation.hybrid.click
 
 import android.view.MotionEvent
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapGestureClassifier
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
-class HybridTapGestureClassifierTest {
+class TapGestureClassifierTest {
     @Test
     fun emits_click_for_valid_tap() {
-        val classifier = HybridTapGestureClassifier().apply { touchSlopPx = 8f }
+        val classifier = TapGestureClassifier().apply { touchSlopPx = 8f }
 
         assertThat(classifier.shouldEmitClick(MotionEvent.ACTION_DOWN, 100f, 200f)).isFalse()
         assertThat(classifier.shouldEmitClick(MotionEvent.ACTION_MOVE, 103f, 204f)).isFalse()
@@ -21,7 +22,7 @@ class HybridTapGestureClassifierTest {
 
     @Test
     fun does_not_emit_click_for_drag_scroll_gesture() {
-        val classifier = HybridTapGestureClassifier().apply { touchSlopPx = 8f }
+        val classifier = TapGestureClassifier().apply { touchSlopPx = 8f }
 
         assertThat(classifier.shouldEmitClick(MotionEvent.ACTION_DOWN, 100f, 200f)).isFalse()
         assertThat(classifier.shouldEmitClick(MotionEvent.ACTION_MOVE, 120f, 230f)).isFalse()
@@ -30,7 +31,7 @@ class HybridTapGestureClassifierTest {
 
     @Test
     fun does_not_emit_click_after_cancel() {
-        val classifier = HybridTapGestureClassifier().apply { touchSlopPx = 8f }
+        val classifier = TapGestureClassifier().apply { touchSlopPx = 8f }
 
         assertThat(classifier.shouldEmitClick(MotionEvent.ACTION_DOWN, 100f, 200f)).isFalse()
         assertThat(classifier.shouldEmitClick(MotionEvent.ACTION_CANCEL, 100f, 200f)).isFalse()

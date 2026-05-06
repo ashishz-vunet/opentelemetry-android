@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.opentelemetry.android.instrumentation.hybrid.click
+package io.opentelemetry.android.instrumentation.hybrid.click.shared
 
 import android.view.MotionEvent
 import kotlin.math.pow
@@ -14,7 +14,7 @@ import kotlin.math.pow
  * A click is emitted only when an active gesture reaches [MotionEvent.ACTION_UP] without moving
  * beyond [touchSlopPx] from the original [MotionEvent.ACTION_DOWN] position.
  */
-internal class HybridTapGestureClassifier {
+internal class TapGestureClassifier {
     /**
      * Maximum movement allowed between down and up for a gesture to still count as a tap.
      */

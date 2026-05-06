@@ -13,13 +13,13 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentManager
 import io.mockk.MockKAnnotations
+import io.mockk.Runs
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import io.mockk.Runs
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY

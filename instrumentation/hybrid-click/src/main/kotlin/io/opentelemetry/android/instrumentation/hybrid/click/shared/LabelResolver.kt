@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.opentelemetry.android.instrumentation.hybrid.click
+package io.opentelemetry.android.instrumentation.hybrid.click.shared
 
 /**
  * Utility that resolves the best display label for click targets.
  */
-internal object HybridLabelResolver {
+internal object LabelResolver {
     /**
      * Resolves in priority order:
      * 1) non-blank content description
@@ -40,4 +40,3 @@ internal object HybridLabelResolver {
         return fallback
     }
 }
-
