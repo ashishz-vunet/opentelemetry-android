@@ -1,0 +1,11 @@
+public final class io/opentelemetry/android/instrumentation/navigation/compose/nav2/ComposeNav2Instrumentation : io/opentelemetry/android/instrumentation/AndroidInstrumentation {
+	public fun <init> ()V
+	public fun getName ()Ljava/lang/String;
+	public fun install (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
+	public fun uninstall (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
+}
+
+public final class io/opentelemetry/android/instrumentation/navigation/compose/nav2/VunetNavObserverKt {
+	public static final fun VunetNavObserver (Landroidx/navigation/NavController;)V
+}
+
