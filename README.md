@@ -135,6 +135,7 @@ See the following pages for details about the related topics:
 - [Kotlin-First Policy](./docs/KOTLIN_FIRST.md)
 - [StrictMode Guidance](./docs/STRICTMODE.md)
 - [Exporter Management](./docs/EXPORTER_CHAIN.md)
+- [Fork publishing and consumption](./docs/FORK_GITHUB_PACKAGES.md)
 
 # Contributing
 

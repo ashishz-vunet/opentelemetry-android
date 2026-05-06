@@ -39,15 +39,20 @@ android-agent          (opinionated setup: core + default instrumentations + Kot
 
 Key points:
 
-- **`android-agent`** is the batteries-included entry point. It bundles `core` plus all default
-  instrumentations and provides a Kotlin DSL for configuration. Most end-user-facing features
-  are already wired here.
+- **`android-agent`** is the batteries-included entry point. It bundles `core` plus a **curated**
+  set of default instrumentations (listed under `// Default instrumentations:` in
+  `android-agent/build.gradle.kts`) and provides a Kotlin DSL for configuration. Other modules
+  under `instrumentation/*` are **opt-in** unless added there explicitly — for example
+  **`instrumentation/navigation-view`** (view-based Activity/Fragment **`ui.navigation`** spans),
+  **`instrumentation/view-click`**, **`instrumentation/compose/click`**, and the separate **agent**
+  artifacts for okhttp3, httpurlconnection, and android-log. Add the dependency you need when
+  integrating with `core` only, or when extending the agent’s classpath.
 - **`core`** configures the OTel Java SDK (TracerProvider, MeterProvider, LoggerProvider).
   It uses `OpenTelemetryRumBuilder` and `SdkPreconfiguredRumBuilder` for two initialization paths.
 - **`instrumentation/*`** modules each implement the `AndroidInstrumentation` interface and are
-  discovered at runtime via `@AutoService`. Some instrumentations (okhttp3, compose,
-  httpurlconnection, android-log) require **bytecode weaving** via a ByteBuddy Gradle plugin —
-  they cannot work as simple runtime dependencies.
+  discovered at runtime via `@AutoService` when the artifact is on the classpath. Some
+  instrumentations (okhttp3, compose, httpurlconnection, android-log) require **bytecode weaving**
+  via a ByteBuddy Gradle plugin — they cannot work as simple runtime dependencies.
 - **`session`** already provides `SessionProvider`, `SessionPublisher`, and `SessionObserver`.
   Session IDs are already injected into spans via processors in `core`.
 
