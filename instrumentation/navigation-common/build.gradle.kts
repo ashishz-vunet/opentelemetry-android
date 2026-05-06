@@ -3,10 +3,10 @@ plugins {
     id("otel.publish-conventions")
 }
 
-description = "OpenTelemetry Android view-based navigation instrumentation"
+description = "OpenTelemetry Android shared navigation instrumentation internals"
 
 android {
-    namespace = "io.opentelemetry.android.instrumentation.navigation.view"
+    namespace = "io.opentelemetry.android.instrumentation.navigation.common"
 
     defaultConfig {
         consumerProguardFiles("consumer-rules.pro")
@@ -16,14 +16,8 @@ android {
 dependencies {
     api(platform(libs.opentelemetry.platform.alpha)) // Required for sonatype publishing
 
-    implementation(project(":agent-api"))
     implementation(project(":common"))
-    implementation(project(":instrumentation:android-instrumentation"))
     implementation(project(":instrumentation:common-api"))
-    implementation(project(":instrumentation:navigation-common"))
     implementation(libs.androidx.core)
-    implementation(libs.androidx.fragment)
     implementation(libs.opentelemetry.sdk)
-
-    testImplementation(project(":test-common"))
 }

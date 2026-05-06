@@ -14,11 +14,12 @@ import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentManager
 import io.opentelemetry.android.instrumentation.common.DefaultScreenNameExtractor
 import io.opentelemetry.android.instrumentation.common.ScreenNameExtractor
-import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationEntryType
-import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationNode
-import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationNodeType
-import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationTransitionCandidate
-import io.opentelemetry.android.instrumentation.navigation.view.models.NavigationTransitionType
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationSpanEmitter
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationEntryType
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationNode
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationNodeType
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationTransitionCandidate
+import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationTransitionType
 import io.opentelemetry.android.instrumentation.navigation.view.models.resolveEntryType
 import io.opentelemetry.sdk.common.Clock
 import java.util.Collections
@@ -30,7 +31,7 @@ import java.util.WeakHashMap
  * [NavigationTransitionType.POP], or [NavigationTransitionType.REPLACE] events.
  */
 internal class ViewNavigationCollector(
-    private val emitter: ViewNavigationSpanEmitter,
+    private val emitter: NavigationSpanEmitter,
     private val clock: Clock,
     private val screenNameExtractor: ScreenNameExtractor = DefaultScreenNameExtractor,
 ) : Application.ActivityLifecycleCallbacks {

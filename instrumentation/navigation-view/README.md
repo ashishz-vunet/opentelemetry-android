@@ -38,7 +38,7 @@ this repository.
 | **Name** | `ui.navigation` |
 | **Duration** | Effectively instantaneous (started and ended in the emitter on the reporting path). Timestamp semantics are dominated by **`navigation.timestamp_ns`** and the OTLP span start time. |
 
-**Attributes** (conceptual keys; Kotlin code uses typed `AttributeKey` values in `ViewNavigationConstants`):
+**Attributes** (conceptual keys; Kotlin code uses typed `AttributeKey` values in `navigation-common` `NavigationConstants`):
 
 | Attribute | Semantics |
 |-----------|-----------|
@@ -124,8 +124,8 @@ per-`FragmentManager` lifecycle listeners are removed.
 |----------------|------|
 | **`ViewNavigationInstrumentation`** | `AndroidInstrumentation` entry; **`name = navigation.view`**. |
 | **`ViewNavigationCollector`** | **`Application.ActivityLifecycleCallbacks`** + fragment callbacks; builds **`NavigationTransitionCandidate`**. |
-| **`ViewNavigationSpanEmitter`** | **`Tracer.spanBuilder("ui.navigation")`** and attributes. |
-| **`models/`** | **`NavigationTransitionType`**, **`NavigationEntryType`**, **`NavigationNode`**, **`NavigationNodeType`**, **`NavigationTransitionCandidate`**, **`resolveEntryType`**. |
+| **`NavigationSpanEmitter`** | Shared emitter from `navigation-common`; creates **`ui.navigation`** spans and attributes. |
+| **`models/ResolveEntryType`** | Activity intent heuristic (`internal`/`deep_link`/`external`) kept in `navigation-view`. |
 
 ## License
 

@@ -24,6 +24,8 @@ import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.android.instrumentation.common.ScreenNameExtractor
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationSpanEmitter
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.common.Clock
@@ -81,7 +83,7 @@ class ViewNavigationCollectorTest {
         assertThat(spans).hasSize(2)
         assertThat(spans[1].attributes.get(SCREEN_NAME_KEY)).isEqualTo("DetailsActivity")
         assertThat(spans[1].attributes.get(LAST_SCREEN_NAME_KEY)).isEqualTo("HomeActivity")
-        assertThat(spans[1].attributes.get(ViewNavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("push")
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("push")
     }
 
     @Test
@@ -114,7 +116,7 @@ class ViewNavigationCollectorTest {
 
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(3)
-        assertThat(spans[2].attributes.get(ViewNavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
+        assertThat(spans[2].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
         assertThat(spans[2].attributes.get(SCREEN_NAME_KEY)).isEqualTo("DetailsFragment")
         assertThat(spans[2].attributes.get(LAST_SCREEN_NAME_KEY)).isEqualTo("HomeFragment")
     }
@@ -149,7 +151,7 @@ class ViewNavigationCollectorTest {
 
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(2)
-        assertThat(spans[1].attributes.get(ViewNavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("pop")
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("pop")
     }
 
     @Test
@@ -185,7 +187,7 @@ class ViewNavigationCollectorTest {
 
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(3)
-        assertThat(spans[2].attributes.get(ViewNavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
+        assertThat(spans[2].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
     }
 
     @Test
@@ -217,7 +219,7 @@ class ViewNavigationCollectorTest {
 
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(4)
-        assertThat(spans[3].attributes.get(ViewNavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("pop")
+        assertThat(spans[3].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("pop")
     }
 
     @Test
@@ -267,8 +269,8 @@ class ViewNavigationCollectorTest {
 
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(3)
-        assertThat(spans[0].attributes.get(ViewNavigationConstants.NAVIGATION_ENTRY_TYPE_KEY)).isEqualTo("deep_link")
-        assertThat(spans[2].attributes.get(ViewNavigationConstants.NAVIGATION_ENTRY_TYPE_KEY)).isEqualTo("internal")
+        assertThat(spans[0].attributes.get(NavigationConstants.NAVIGATION_ENTRY_TYPE_KEY)).isEqualTo("deep_link")
+        assertThat(spans[2].attributes.get(NavigationConstants.NAVIGATION_ENTRY_TYPE_KEY)).isEqualTo("internal")
     }
 
     @Test
@@ -315,7 +317,7 @@ class ViewNavigationCollectorTest {
 
     private fun createCollector(nameMap: Map<Any, String>): ViewNavigationCollector {
         val screenNameExtractor = ScreenNameExtractor { instance -> nameMap[instance] ?: instance::class.java.simpleName }
-        val emitter = ViewNavigationSpanEmitter(openTelemetry.getTracer("test-navigation-view"))
+        val emitter = NavigationSpanEmitter(openTelemetry.getTracer("test-navigation-view"))
         return ViewNavigationCollector(emitter, testClock, screenNameExtractor)
     }
 
