@@ -9,6 +9,7 @@ import io.opentelemetry.android.common.internal.utils.threadIdCompat
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.context.Context
 import io.opentelemetry.semconv.ExceptionAttributes.EXCEPTION_MESSAGE
 import io.opentelemetry.semconv.ExceptionAttributes.EXCEPTION_STACKTRACE
@@ -21,23 +22,21 @@ internal class CrashReporter(
 ) {
     private val extractors: List<EventAttributesExtractor<CrashDetails>> =
         additionalExtractors.toList()
+    private lateinit var crashTracer: Tracer
 
     /** Installs the crash reporting instrumentation.  */
     fun install(openTelemetry: OpenTelemetry) {
+        crashTracer = openTelemetry.tracerProvider.get("io.opentelemetry.crash")
         val handler =
             CrashReportingExceptionHandler(
-                crashProcessor = { crashDetails: CrashDetails ->
-                    processCrash(openTelemetry, crashDetails)
+                crashProcessor = { crashDetails ->
+                    processCrash(crashDetails)
                 },
             )
         Thread.setDefaultUncaughtExceptionHandler(handler)
     }
 
-    private fun processCrash(
-        openTelemetry: OpenTelemetry,
-        crashDetails: CrashDetails,
-    ) {
-        val logger = openTelemetry.logsBridge.loggerBuilder("io.opentelemetry.crash").build()
+    private fun processCrash(crashDetails: CrashDetails) {
         val throwable = crashDetails.cause
         val thread = crashDetails.thread
         val attributesBuilder =
@@ -54,11 +53,10 @@ internal class CrashReporter(
             val extractedAttributes = extractor.extract(Context.current(), crashDetails)
             attributesBuilder.putAll(extractedAttributes)
         }
-        val eventBuilder =
-            logger.logRecordBuilder()
-        eventBuilder
-            .setEventName("device.crash")
+        crashTracer
+            .spanBuilder("device.crash")
             .setAllAttributes(attributesBuilder.build())
-            .emit()
+            .startSpan()
+            .end()
     }
 }
