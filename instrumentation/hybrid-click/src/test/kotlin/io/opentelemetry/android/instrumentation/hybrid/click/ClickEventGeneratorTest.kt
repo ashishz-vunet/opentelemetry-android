@@ -5,14 +5,17 @@
 
 package io.opentelemetry.android.instrumentation.hybrid.click
 
+import android.view.MotionEvent
 import android.view.View
 import android.view.Window
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import io.opentelemetry.android.instrumentation.hybrid.click.compose.ComposeTapTargetDetector
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_VIEW_LABEL
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_VIEW_SOURCE
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_VIEW
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTarget
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.UI_CLICK_SPAN_NAME
 import io.opentelemetry.android.instrumentation.hybrid.click.view.ViewTapTargetDetector
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.SpanBuilder
@@ -32,18 +35,18 @@ class ClickEventGeneratorTest {
             y = 20L,
         )
 
+    private val window = mockk<Window>(relaxed = true)
+    private val tracer = mockk<Tracer>(relaxed = true)
+
     @Test
     fun `view detector used when compose detector returns null`() {
-        val composeDet = mockk<ComposeTapTargetDetector>()
         val viewDet = mockk<ViewTapTargetDetector>()
         val decorView = mockk<View>(relaxed = true)
 
-        every { composeDet.findTapTarget(decorView, 10f, 20f) } returns null
         every { viewDet.findTapTarget(decorView, 10f, 20f) } returns viewTarget
 
         val result =
-            composeDet.findTapTarget(decorView, 10f, 20f)
-                ?: viewDet.findTapTarget(decorView, 10f, 20f)
+            viewDet.findTapTarget(decorView, 10f, 20f)
 
         assertThat(result).isEqualTo(viewTarget)
         assertThat(result?.source).isEqualTo(SOURCE_VIEW)
@@ -52,7 +55,6 @@ class ClickEventGeneratorTest {
 
     @Test
     fun `view detector not called when compose detector returns target`() {
-        val composeDet = mockk<ComposeTapTargetDetector>()
         val viewDet = mockk<ViewTapTargetDetector>()
         val decorView = mockk<View>(relaxed = true)
         val composeTarget =
@@ -65,14 +67,53 @@ class ClickEventGeneratorTest {
                 y = 5L,
             )
 
-        every { composeDet.findTapTarget(decorView, 5f, 5f) } returns composeTarget
+        every { viewDet.findTapTarget(decorView, 5f, 5f) } returns composeTarget
 
         val result =
-            composeDet.findTapTarget(decorView, 5f, 5f)
-                ?: viewDet.findTapTarget(decorView, 5f, 5f)
+            viewDet.findTapTarget(decorView, 5f, 5f)
 
         assertThat(result).isEqualTo(composeTarget)
         assertThat(result?.source).isEqualTo("compose")
+        verify(exactly = 0) { viewDet.findTapTarget(any(), any(), any()) }
+    }
+
+    @Test
+    fun `should not emit click if view map to compose`() {
+        val viewDet = mockk<ViewTapTargetDetector>()
+
+        val generator = ClickEventGenerator(tracer, viewDet, 0)
+        generator.startTracking(window)
+
+        val motionEvent =
+            mockk<MotionEvent> {
+                every { action } returns MotionEvent.ACTION_DOWN
+                every { x } returns 10f
+                every { y } returns 20f
+            }
+
+        val result = generator.onTouchEvent(motionEvent)
+
+        assertThat(result).isFalse
+        verify(exactly = 0) { viewDet.findTapTarget(any(), any(), any()) }
+    }
+
+    @Test
+    fun `should not emit click if not a valid tap`() {
+        val viewDet = mockk<ViewTapTargetDetector>()
+
+        val generator = ClickEventGenerator(tracer, viewDet, 0)
+        generator.startTracking(window)
+
+        val motionEvent =
+            mockk<MotionEvent> {
+                every { action } returns MotionEvent.ACTION_MOVE
+                every { x } returns 10f
+                every { y } returns 20f
+            }
+
+        val result = generator.onTouchEvent(motionEvent)
+
+        assertThat(result).isFalse
         verify(exactly = 0) { viewDet.findTapTarget(any(), any(), any()) }
     }
 }

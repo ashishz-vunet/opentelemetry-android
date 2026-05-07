@@ -10,6 +10,7 @@ import io.opentelemetry.android.common.internal.utils.threadIdCompat
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.logs.Logger
+import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.context.Context
 import io.opentelemetry.semconv.ExceptionAttributes.EXCEPTION_STACKTRACE
 import io.opentelemetry.semconv.incubating.ThreadIncubatingAttributes.THREAD_ID
@@ -31,23 +32,23 @@ internal val DEFAULT_POLL_DURATION_NS = SECONDS.toNanos(1)
 internal class AnrWatcher(
     private val uiHandler: Handler,
     private val mainThread: Thread,
-    private val anrLogger: Logger,
+    private val anrTracer: Tracer,
     private val additionalExtractors: List<EventAttributesExtractor<Array<StackTraceElement>>>,
     private val pollDurationNs: Long = DEFAULT_POLL_DURATION_NS,
 ) : Runnable {
     private val anrCounter = AtomicInteger()
 
-    constructor(uiHandler: Handler, mainThread: Thread, anrLogger: Logger) :
-        this(uiHandler, mainThread, anrLogger, emptyList(), DEFAULT_POLL_DURATION_NS)
+    constructor(uiHandler: Handler, mainThread: Thread, anrTracer: Tracer) :
+        this(uiHandler, mainThread, anrTracer, emptyList(), DEFAULT_POLL_DURATION_NS)
 
     // A constructor that can be called from Java
     constructor(
         uiHandler: Handler,
         mainThread: Thread,
-        anrLogger: Logger,
+        anrTracer: Tracer,
         additionalExtractors: List<EventAttributesExtractor<Array<StackTraceElement>>>,
     ) :
-        this(uiHandler, mainThread, anrLogger, additionalExtractors, DEFAULT_POLL_DURATION_NS)
+        this(uiHandler, mainThread, anrTracer, additionalExtractors, DEFAULT_POLL_DURATION_NS)
 
     override fun run() {
         val response = CountDownLatch(1)
@@ -88,11 +89,9 @@ internal class AnrWatcher(
             attributesBuilder.putAll(extractedAttributes)
         }
 
-        val eventBuilder = anrLogger.logRecordBuilder()
-        eventBuilder
-            .setEventName("device.anr")
-            .setAllAttributes(attributesBuilder.build())
-            .emit()
+        val tracerBuilder = anrTracer.spanBuilder("device.anr").setAllAttributes(attributesBuilder.build())
+        tracerBuilder.startSpan().end()
+
     }
 
     private fun stackTraceToString(stackTrace: Array<StackTraceElement>): String {

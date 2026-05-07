@@ -1,6 +1,17 @@
 plugins {
     id("otel.android-library-conventions")
     id("otel.publish-conventions")
+    alias(libs.plugins.kotlin.compose)
+}
+
+// AGP 9 does not apply KotlinBasePluginWrapper, so the Compose plugin cannot auto-detect
+// the Kotlin version for kotlin-compose-compiler-plugin-embeddable. Pin it explicitly.
+configurations.matching { it.name.startsWith("kotlinCompilerPluginClasspath") }.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin" && requested.name == "kotlin-compose-compiler-plugin-embeddable") {
+            useVersion(libs.versions.kotlin.get())
+        }
+    }
 }
 
 description = "OpenTelemetry Android Compose Navigation 3 instrumentation"
@@ -10,6 +21,10 @@ android {
 
     defaultConfig {
         consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildFeatures {
+        compose = true
     }
 }
 

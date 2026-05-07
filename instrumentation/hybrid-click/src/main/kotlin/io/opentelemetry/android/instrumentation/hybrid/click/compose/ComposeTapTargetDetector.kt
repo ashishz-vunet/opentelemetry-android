@@ -15,34 +15,30 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsModifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.annotation.RequiresApi
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.LabelResolver
-import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_COMPOSE
-import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTarget
 import java.util.LinkedList
 
-@RequiresApi(24)
+/**
+ * Resolves Compose tap targets from a hybrid screen's root [View].
+ *
+ * This detector stays focused on Compose-node traversal and metadata extraction. The conversion to
+ * hybrid click model objects is intentionally handled outside this class.
+ */
 internal class ComposeTapTargetDetector(
     private val composeLayoutNodeUtil: ComposeLayoutNodeUtil = ComposeLayoutNodeUtil(),
 ) {
+    /**
+     * Finds the deepest eligible [LayoutNode] at the provided window coordinates.
+     */
     fun findTapTarget(
-        decorView: View,
+        rootView: View,
         x: Float,
         y: Float,
-    ): TapTarget? {
-        val layoutNode = findLayoutNodeTarget(decorView, x, y) ?: return null
-        val position = composeLayoutNodeUtil.getLayoutNodePositionInWindow(layoutNode)
-        val fallbackId = nodeId(layoutNode)
-        return TapTarget(
-            source = SOURCE_COMPOSE,
-            widgetId = fallbackId,
-            widgetName = nodeToName(layoutNode),
-            label = nodeToLabel(layoutNode),
-            x = position?.x?.toLong() ?: 0L,
-            y = position?.y?.toLong() ?: 0L,
-        )
-    }
+    ): LayoutNode? = findLayoutNodeTarget(rootView, x, y)
 
+    /**
+     * Resolves a stable display name for telemetry from node semantics/modifier metadata.
+     */
     internal fun nodeToName(node: LayoutNode): String =
         try {
             getNodeName(node) ?: nodeId(node)
@@ -50,6 +46,17 @@ internal class ComposeTapTargetDetector(
             nodeId(node)
         }
 
+    /**
+     * Resolves node coordinates in window space for span attributes.
+     */
+    internal fun nodeToPosition(node: LayoutNode): Pair<Long, Long> {
+        val position = composeLayoutNodeUtil.getLayoutNodePositionInWindow(node)
+        return Pair(position?.x?.toLong() ?: 0L, position?.y?.toLong() ?: 0L)
+    }
+
+    /**
+     * Scans the Android view tree to locate Compose [Owner] roots and delegates node hit-testing.
+     */
     private fun findLayoutNodeTarget(
         decorView: View,
         x: Float,
@@ -78,6 +85,9 @@ internal class ComposeTapTargetDetector(
         return target
     }
 
+    /**
+     * Breadth-first traversal over Compose layout tree to keep the deepest matching node.
+     */
     private fun findTapTarget(
         owner: Owner,
         x: Float,
@@ -97,6 +107,9 @@ internal class ComposeTapTargetDetector(
         return target
     }
 
+    /**
+     * Checks coordinate bounds and clickability constraints.
+     */
     private fun hitTest(
         node: LayoutNode,
         x: Float,
@@ -110,6 +123,9 @@ internal class ComposeTapTargetDetector(
         return bounded && isValidClickTarget(node)
     }
 
+    /**
+     * Determines whether node semantics/modifiers represent a clickable element.
+     */
     private fun isValidClickTarget(node: LayoutNode): Boolean {
         for (info in node.getModifierInfo()) {
             val modifier = info.modifier
@@ -133,6 +149,9 @@ internal class ComposeTapTargetDetector(
         return false
     }
 
+    /**
+     * Produces a user-facing label with fallback resolution strategy.
+     */
     private fun nodeToLabel(node: LayoutNode): String {
         val extractedLabel = getNodeName(node)
         return LabelResolver.resolve(
@@ -174,6 +193,9 @@ internal class ComposeTapTargetDetector(
         return className
     }
 
+    /**
+     * Returns a stable fallback node identifier used in telemetry.
+     */
     private fun nodeId(node: LayoutNode): String = node.hashCode().toString()
 
     companion object {

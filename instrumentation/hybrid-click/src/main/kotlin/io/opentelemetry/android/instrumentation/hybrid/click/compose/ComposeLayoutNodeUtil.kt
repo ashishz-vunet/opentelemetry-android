@@ -11,10 +11,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.positionInWindow
-import androidx.annotation.RequiresApi
 import androidx.compose.ui.node.LayoutNode
 
-@RequiresApi(24)
 internal class ComposeLayoutNodeUtil {
     internal fun getLayoutNodeBoundsInWindow(node: LayoutNode): Rect? =
         try {

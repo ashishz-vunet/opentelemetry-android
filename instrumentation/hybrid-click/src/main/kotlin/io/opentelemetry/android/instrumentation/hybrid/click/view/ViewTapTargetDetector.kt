@@ -10,18 +10,19 @@ import android.view.ViewGroup
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.LabelResolver
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_VIEW
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTarget
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTargetDetector
 import java.util.LinkedList
 
-internal class ViewTapTargetDetector {
+internal class ViewTapTargetDetector : TapTargetDetector {
     private val viewCoordinates = IntArray(2)
 
-    fun findTapTarget(
-        decorView: View,
+    override fun findTapTarget(
+        rootView: View,
         x: Float,
         y: Float,
     ): TapTarget? {
         val queue = LinkedList<View>()
-        queue.addFirst(decorView)
+        queue.addFirst(rootView)
         var target: View? = null
 
         while (queue.isNotEmpty()) {
