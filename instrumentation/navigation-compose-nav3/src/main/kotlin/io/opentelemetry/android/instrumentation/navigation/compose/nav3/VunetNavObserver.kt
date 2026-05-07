@@ -13,13 +13,13 @@ import androidx.navigation3.runtime.NavKey
 
 @Composable
 fun VunetNavObserver(
-    backStack: NavBackStack,
+    backStack: NavBackStack<NavKey>,
     nameOf: (NavKey) -> String = { it::class.simpleName.orEmpty() },
 ) {
     val rum = NavObserverRumHolder.current() ?: return
     val collector = ComposeNav3Collector(rum, nameOf)
     LaunchedEffect(backStack, rum, nameOf) {
         snapshotFlow { backStack.toList() }
-            .collect { keys -> collector.onBackStackChanged(keys) }
+            .collect { keys: List<NavKey> -> collector.onBackStackChanged(keys) }
     }
 }
