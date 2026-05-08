@@ -52,7 +52,7 @@ class ClickEventGeneratorTest {
     }
 
     @Test
-    fun `view detector not called when compose detector returns target`() {
+    fun `view detector returns compose target when queried`() {
         val viewDet = mockk<ViewTapTargetDetector>()
         val decorView = mockk<View>(relaxed = true)
         val composeTarget =

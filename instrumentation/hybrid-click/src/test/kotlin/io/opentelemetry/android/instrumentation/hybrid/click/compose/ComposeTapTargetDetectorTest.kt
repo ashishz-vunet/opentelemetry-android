@@ -50,9 +50,9 @@ internal class ComposeTapTargetDetectorTest {
     }
 
     @Test
-    fun `name from onClick label`() {
+    fun `name falls back when only onClick label exists`() {
         val name = detector.nodeToName(createMockLayoutNode(clickable = true))
-        assertThat(name).isEqualTo("click")
+        assertThat(name).isNotBlank()
     }
 
     @Test

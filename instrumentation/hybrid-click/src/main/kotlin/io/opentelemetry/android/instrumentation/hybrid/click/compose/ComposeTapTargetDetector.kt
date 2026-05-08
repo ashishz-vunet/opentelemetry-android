@@ -12,8 +12,8 @@ import android.view.ViewGroup
 import androidx.compose.ui.node.LayoutNode
 import androidx.compose.ui.node.Owner
 import androidx.compose.ui.semantics.SemanticsConfiguration
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsModifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getAllSemanticsNodes
@@ -219,26 +219,43 @@ internal class ComposeTapTargetDetector(
     private fun getMergedSemanticsLabel(node: LayoutNode): String? {
         return try {
             val owner = node.owner ?: return null
-            val semanticsById =
-                owner.semanticsOwner
-                    .getAllSemanticsNodes(mergingEnabled = true)
-                    .associateBy(SemanticsNode::id)
+            val ancestors = collectAncestors(node)
+            if (ancestors.isEmpty()) {
+                return null
+            }
 
-            var current: LayoutNode? = node
-            while (current != null) {
-                val semanticsNode = semanticsById[current.semanticsId]
-                if (semanticsNode != null) {
-                    val semanticsLabel = semanticsLabelFrom(semanticsNode.config)
-                    if (!semanticsLabel.isNullOrBlank()) {
-                        return semanticsLabel
+            val rankBySemanticsId =
+                ancestors
+                    .mapIndexed { index, ancestor -> ancestor.semanticsId to index }
+                    .toMap()
+
+            var bestRank = Int.MAX_VALUE
+            var bestLabel: String? = null
+            for (semanticsNode in owner.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true)) {
+                val rank = rankBySemanticsId[semanticsNode.id] ?: continue
+                val semanticsLabel = semanticsLabelFrom(semanticsNode.config)
+                if (!semanticsLabel.isNullOrBlank() && rank < bestRank) {
+                    bestLabel = semanticsLabel
+                    bestRank = rank
+                    if (rank == 0) {
+                        break
                     }
                 }
-                current = current.parent
             }
-            null
+            bestLabel
         } catch (_: Throwable) {
             null
         }
+    }
+
+    private fun collectAncestors(node: LayoutNode): List<LayoutNode> {
+        val ancestors = mutableListOf<LayoutNode>()
+        var current: LayoutNode? = node
+        while (current != null) {
+            ancestors.add(current)
+            current = current.parent
+        }
+        return ancestors
     }
 
     private fun semanticsLabelFrom(configuration: SemanticsConfiguration): String? {
@@ -251,11 +268,6 @@ internal class ComposeTapTargetDetector(
         val text = configuration.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text
         if (!text.isNullOrBlank()) {
             return text
-        }
-
-        val onClickLabel = configuration.getOrNull(SemanticsActions.OnClick)?.label
-        if (!onClickLabel.isNullOrBlank()) {
-            return onClickLabel
         }
 
         return null
@@ -292,20 +304,12 @@ internal class ComposeTapTargetDetector(
         return null
     }
 
-    // Semantics precedence only: OnClick label -> ContentDescription
+    // Fallback semantics precedence only: ContentDescription
     private fun getNodeName(node: LayoutNode): String? {
         for (info in node.getModifierInfo()) {
             val modifier = info.modifier
             if (modifier is SemanticsModifier) {
                 with(modifier.semanticsConfiguration) {
-                    val onClickAction = getOrNull(SemanticsActions.OnClick)
-                    if (onClickAction != null) {
-                        val label = onClickAction.label
-                        if (label != null) {
-                            return label
-                        }
-                    }
-
                     val contentDescriptionList =
                         getOrNull(SemanticsProperties.ContentDescription)
                     if (contentDescriptionList != null) {
