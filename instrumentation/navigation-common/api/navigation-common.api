@@ -7,12 +7,14 @@ public final class io/opentelemetry/android/instrumentation/navigation/common/Na
 	public static final field NAVIGATION_SOURCE_TYPE_KEY Lio/opentelemetry/api/common/AttributeKey;
 	public static final field NAVIGATION_TIMESTAMP_NS_KEY Lio/opentelemetry/api/common/AttributeKey;
 	public static final field NAVIGATION_TRANSITION_TYPE_KEY Lio/opentelemetry/api/common/AttributeKey;
+	public static final field NAVIGATION_TRIGGER_KEY Lio/opentelemetry/api/common/AttributeKey;
 	public static final field SPAN_NAME Ljava/lang/String;
 }
 
 public final class io/opentelemetry/android/instrumentation/navigation/common/NavigationSpanEmitter {
 	public fun <init> (Lio/opentelemetry/api/trace/Tracer;)V
 	public final fun emit (Lio/opentelemetry/android/instrumentation/navigation/common/models/NavigationTransitionCandidate;)V
+	public final fun emit (Lio/opentelemetry/android/instrumentation/navigation/common/models/NavigationTransitionCandidate;Ljava/lang/String;)V
 }
 
 public final class io/opentelemetry/android/instrumentation/navigation/common/models/NavigationEntryType : java/lang/Enum {

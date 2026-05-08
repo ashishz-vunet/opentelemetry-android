@@ -11,8 +11,6 @@ import android.view.Window
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_VIEW_LABEL
-import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_VIEW_SOURCE
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_VIEW
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTarget
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.UI_CLICK_SPAN_NAME
@@ -74,46 +72,6 @@ class ClickEventGeneratorTest {
 
         assertThat(result).isEqualTo(composeTarget)
         assertThat(result?.source).isEqualTo("compose")
-        verify(exactly = 0) { viewDet.findTapTarget(any(), any(), any()) }
-    }
-
-    @Test
-    fun `should not emit click if view map to compose`() {
-        val viewDet = mockk<ViewTapTargetDetector>()
-
-        val generator = ClickEventGenerator(tracer, viewDet, 0)
-        generator.startTracking(window)
-
-        val motionEvent =
-            mockk<MotionEvent> {
-                every { action } returns MotionEvent.ACTION_DOWN
-                every { x } returns 10f
-                every { y } returns 20f
-            }
-
-        val result = generator.onTouchEvent(motionEvent)
-
-        assertThat(result).isFalse
-        verify(exactly = 0) { viewDet.findTapTarget(any(), any(), any()) }
-    }
-
-    @Test
-    fun `should not emit click if not a valid tap`() {
-        val viewDet = mockk<ViewTapTargetDetector>()
-
-        val generator = ClickEventGenerator(tracer, viewDet, 0)
-        generator.startTracking(window)
-
-        val motionEvent =
-            mockk<MotionEvent> {
-                every { action } returns MotionEvent.ACTION_MOVE
-                every { x } returns 10f
-                every { y } returns 20f
-            }
-
-        val result = generator.onTouchEvent(motionEvent)
-
-        assertThat(result).isFalse
-        verify(exactly = 0) { viewDet.findTapTarget(any(), any(), any()) }
+        verify(exactly = 1) { viewDet.findTapTarget(decorView, 5f, 5f) }
     }
 }

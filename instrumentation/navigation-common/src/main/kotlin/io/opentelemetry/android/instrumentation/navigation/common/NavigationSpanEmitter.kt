@@ -5,7 +5,6 @@
 
 package io.opentelemetry.android.instrumentation.navigation.common
 
-import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_DESTINATION_NAME_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_DESTINATION_TYPE_KEY
@@ -13,6 +12,7 @@ import io.opentelemetry.android.instrumentation.navigation.common.NavigationCons
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_SOURCE_NAME_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_SOURCE_TYPE_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_TIMESTAMP_NS_KEY
+import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_TRIGGER_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.SPAN_NAME
 import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationTransitionCandidate
@@ -22,6 +22,13 @@ class NavigationSpanEmitter(
     private val tracer: Tracer,
 ) {
     fun emit(candidate: NavigationTransitionCandidate) {
+        emit(candidate, navigationTrigger = null)
+    }
+
+    fun emit(
+        candidate: NavigationTransitionCandidate,
+        navigationTrigger: String?,
+    ) {
         val spanBuilder =
             tracer
                 .spanBuilder(SPAN_NAME)
@@ -31,9 +38,12 @@ class NavigationSpanEmitter(
                 .setAttribute(NAVIGATION_ENTRY_TYPE_KEY, candidate.entryType.value)
                 .setAttribute(NAVIGATION_TIMESTAMP_NS_KEY, candidate.timestampNanos)
 
+        navigationTrigger?.let {
+            spanBuilder.setAttribute(NAVIGATION_TRIGGER_KEY, it)
+        }
+
         candidate.source?.let {
             spanBuilder
-                .setAttribute(LAST_SCREEN_NAME_KEY, it.name)
                 .setAttribute(NAVIGATION_SOURCE_TYPE_KEY, it.type.name.lowercase())
                 .setAttribute(NAVIGATION_SOURCE_NAME_KEY, it.name)
         }

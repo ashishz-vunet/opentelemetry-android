@@ -5,7 +5,6 @@
 
 package io.opentelemetry.android.instrumentation.navigation.view
 
-import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.android.instrumentation.navigation.view.ViewNavigationConstants.NAVIGATION_ACTION_KEY
@@ -34,7 +33,6 @@ internal class ViewNavigationSpanEmitter(
 
         candidate.source?.let {
             spanBuilder
-                .setAttribute(LAST_SCREEN_NAME_KEY, it.name)
                 .setAttribute(NAVIGATION_SOURCE_TYPE_KEY, it.type.name.lowercase())
                 .setAttribute(NAVIGATION_SOURCE_NAME_KEY, it.name)
         }

@@ -21,7 +21,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.opentelemetry.android.OpenTelemetryRum
-import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.android.instrumentation.common.ScreenNameExtractor
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants
@@ -82,7 +81,6 @@ class ViewNavigationCollectorTest {
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(2)
         assertThat(spans[1].attributes.get(SCREEN_NAME_KEY)).isEqualTo("DetailsActivity")
-        assertThat(spans[1].attributes.get(LAST_SCREEN_NAME_KEY)).isEqualTo("HomeActivity")
         assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("push")
     }
 
@@ -118,7 +116,6 @@ class ViewNavigationCollectorTest {
         assertThat(spans).hasSize(3)
         assertThat(spans[2].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
         assertThat(spans[2].attributes.get(SCREEN_NAME_KEY)).isEqualTo("DetailsFragment")
-        assertThat(spans[2].attributes.get(LAST_SCREEN_NAME_KEY)).isEqualTo("HomeFragment")
     }
 
     @Test

@@ -11,8 +11,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.View
 import android.view.Window
-import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_VIEW_LABEL
-import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_VIEW_SOURCE
+import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_WIDGET_SOURCE
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_COMPOSE
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapGestureClassifier
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTarget
@@ -153,11 +152,10 @@ internal class ClickEventGenerator(
         val span =
             tracer.spanBuilder(UI_CLICK_SPAN_NAME)
                 .setAttribute(AppIncubatingAttributes.APP_WIDGET_ID, target.widgetId)
-                .setAttribute(AppIncubatingAttributes.APP_WIDGET_NAME, target.widgetName)
+                .setAttribute(AppIncubatingAttributes.APP_WIDGET_NAME, target.label)
                 .setAttribute(AppIncubatingAttributes.APP_SCREEN_COORDINATE_X, target.x)
                 .setAttribute(AppIncubatingAttributes.APP_SCREEN_COORDINATE_Y, target.y)
-                .setAttribute(ATTR_VIEW_LABEL, target.label)
-                .setAttribute(ATTR_VIEW_SOURCE, target.source)
+                .setAttribute(ATTR_WIDGET_SOURCE, target.source)
                 .startSpan()
 
         val scope = span.makeCurrent()

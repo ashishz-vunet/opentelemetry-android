@@ -25,6 +25,7 @@ class ComposeNav3Instrumentation : AndroidInstrumentation {
         context: Context,
         openTelemetryRum: OpenTelemetryRum,
     ) {
+        NavObserverCollectorHolder.clear()
         NavObserverRumHolder.clear()
     }
 }
