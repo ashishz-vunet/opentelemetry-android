@@ -11,9 +11,11 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.ui.node.LayoutNode
 import androidx.compose.ui.node.Owner
+import androidx.compose.ui.semantics.SemanticsConfiguration
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsModifier
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.LabelResolver
 import java.util.LinkedList
@@ -41,7 +43,10 @@ internal class ComposeTapTargetDetector(
      */
     internal fun nodeToName(node: LayoutNode): String =
         try {
-            getNodeName(node) ?: nodeId(node)
+            getMergedSemanticsLabel(node)
+                ?: getNodeName(node)
+                ?: getModifierClassName(node)
+                ?: nodeId(node)
         } catch (_: Throwable) {
             nodeId(node)
         }
@@ -151,32 +156,159 @@ internal class ComposeTapTargetDetector(
 
     /**
      * Produces a user-facing label with fallback resolution strategy.
+     *
+     * Priority:
+     * 1. OnClick label or ContentDescription (from semantics)
+     * 2. Text from child Text composables (e.g., button text)
+     * 3. Modifier class name (fallback)
      */
+    @Suppress("unused") // Used reflectively by ClickEventGenerator
     private fun nodeToLabel(node: LayoutNode): String {
-        val extractedLabel = getNodeName(node)
+        val semanticsLabel = getMergedSemanticsLabel(node) ?: getNodeName(node)
+        val childText = extractTextFromChildren(node)
+        val className = getModifierClassName(node)
         return LabelResolver.resolve(
-            contentDescription = extractedLabel,
-            text = null,
-            className = "ComposeNode",
+            contentDescription = semanticsLabel,
+            text = childText,
+            className = className,
             fallback = nodeId(node),
         )
     }
 
-    // Label precedence: OnClick label -> ContentDescription -> last modifier simpleName
-    private fun getNodeName(node: LayoutNode): String? {
-        var className: String? = null
+    /**
+     * Extracts text from child Text composables (e.g., "Go to API Test Screen" from Button { Text(...) }).
+     * Uses breadth-first traversal to find the nearest text node.
+     */
+    private fun extractTextFromChildren(node: LayoutNode): String? {
+        try {
+            val currentNodeText = extractSemanticsText(node)
+            if (!currentNodeText.isNullOrBlank()) {
+                return currentNodeText
+            }
+
+            val queue = LinkedList<LayoutNode>()
+            queue.addAll(childNodesOf(node))
+
+            while (queue.isNotEmpty()) {
+                val child = queue.removeFirst()
+                val text = extractSemanticsText(child)
+                if (!text.isNullOrBlank()) {
+                    return text
+                }
+
+                // Add all children to queue for deeper traversal
+                queue.addAll(childNodesOf(child))
+            }
+        } catch (_: Throwable) {
+            // Reflection and Compose internals may throw; fail gracefully
+        }
+        return null
+    }
+
+    private fun childNodesOf(node: LayoutNode): List<LayoutNode> =
+        try {
+            node.zSortedChildren.asMutableList()
+        } catch (_: Throwable) {
+            try {
+                node.children.toList()
+            } catch (_: Throwable) {
+                emptyList<LayoutNode>()
+            }
+        }
+
+    private fun getMergedSemanticsLabel(node: LayoutNode): String? {
+        return try {
+            val owner = node.owner ?: return null
+            val ancestors = collectAncestors(node)
+            if (ancestors.isEmpty()) {
+                return null
+            }
+
+            val rankBySemanticsId =
+                ancestors
+                    .mapIndexed { index, ancestor -> ancestor.semanticsId to index }
+                    .toMap()
+
+            var bestRank = Int.MAX_VALUE
+            var bestLabel: String? = null
+            for (semanticsNode in owner.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true)) {
+                val rank = rankBySemanticsId[semanticsNode.id]
+                if (rank != null) {
+                    val semanticsLabel = semanticsLabelFrom(semanticsNode.config)
+                    if (!semanticsLabel.isNullOrBlank() && rank < bestRank) {
+                        bestLabel = semanticsLabel
+                        bestRank = rank
+                    }
+                }
+            }
+            bestLabel
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun collectAncestors(node: LayoutNode): List<LayoutNode> {
+        val ancestors = mutableListOf<LayoutNode>()
+        var current: LayoutNode? = node
+        while (current != null) {
+            ancestors.add(current)
+            current = current.parent
+        }
+        return ancestors
+    }
+
+    private fun semanticsLabelFrom(configuration: SemanticsConfiguration): String? {
+        val contentDescription =
+            configuration.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()
+        if (!contentDescription.isNullOrBlank()) {
+            return contentDescription
+        }
+
+        val text = configuration.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text
+        if (!text.isNullOrBlank()) {
+            return text
+        }
+
+        return null
+    }
+
+    private fun extractSemanticsText(node: LayoutNode): String? {
         for (info in node.getModifierInfo()) {
             val modifier = info.modifier
             if (modifier is SemanticsModifier) {
                 with(modifier.semanticsConfiguration) {
-                    val onClickAction = getOrNull(SemanticsActions.OnClick)
-                    if (onClickAction != null) {
-                        val label = onClickAction.label
-                        if (label != null) {
-                            return label
+                    val textList = getOrNull(SemanticsProperties.Text)
+                    if (textList != null && textList.isNotEmpty()) {
+                        val text = textList[0].text
+                        if (text.isNotBlank()) {
+                            return text
                         }
                     }
+                }
+            }
+        }
+        return null
+    }
 
+    /**
+     * Extracts the modifier class name as a fallback label.
+     */
+    private fun getModifierClassName(node: LayoutNode): String? {
+        for (info in node.getModifierInfo()) {
+            val modifier = info.modifier
+            if (modifier !is SemanticsModifier) {
+                return modifier::class.qualifiedName
+            }
+        }
+        return null
+    }
+
+    // Fallback semantics precedence only: ContentDescription
+    private fun getNodeName(node: LayoutNode): String? {
+        for (info in node.getModifierInfo()) {
+            val modifier = info.modifier
+            if (modifier is SemanticsModifier) {
+                with(modifier.semanticsConfiguration) {
                     val contentDescriptionList =
                         getOrNull(SemanticsProperties.ContentDescription)
                     if (contentDescriptionList != null) {
@@ -186,11 +318,9 @@ internal class ComposeTapTargetDetector(
                         }
                     }
                 }
-            } else {
-                className = modifier::class.qualifiedName
             }
         }
-        return className
+        return null
     }
 
     /**

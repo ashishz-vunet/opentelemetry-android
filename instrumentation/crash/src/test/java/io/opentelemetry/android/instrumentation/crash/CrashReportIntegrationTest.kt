@@ -13,10 +13,9 @@ import io.opentelemetry.android.common.internal.utils.threadIdCompat
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
-import io.opentelemetry.api.logs.Severity
 import io.opentelemetry.context.Context
-import io.opentelemetry.sdk.logs.data.LogRecordData
 import io.opentelemetry.sdk.testing.junit4.OpenTelemetryRule
+import io.opentelemetry.sdk.trace.data.SpanData
 import io.opentelemetry.semconv.ExceptionAttributes
 import io.opentelemetry.semconv.incubating.ThreadIncubatingAttributes
 import java.io.PrintWriter
@@ -104,7 +103,7 @@ internal class CrashReportIntegrationTest {
             thread = Thread.currentThread(),
             expectedExcType = "java.lang.IllegalArgumentException",
         )
-        val attributes = rule.logRecords.single().attributes
+        val attributes = waitForSingleResult { rule.spans }.attributes
         val attrs = attributes.asMap().mapKeys { it.key.key }
         assertEquals("value1", attrs["key1"])
         assertEquals("value2", attrs["key2"])
@@ -160,7 +159,7 @@ internal class CrashReportIntegrationTest {
         }
         latch.await(100, TimeUnit.MILLISECONDS)
 
-        val log = rule.logRecords.single()
+        val log = waitForSingleResult { rule.spans }
         log.assertCrashCaptured(
             expectedStacktrace = exc.stackTraceToString(),
             thread = thread,
@@ -175,10 +174,9 @@ internal class CrashReportIntegrationTest {
     }
 
     /**
-     * Simulates an uncaught exception on the current thread and returns the log record
-     * from [FakeLogRecordExporter]
+     * Simulates an uncaught exception on the current thread and returns the exported span.
      */
-    private fun simulateUncaughtException(throwable: Throwable): LogRecordData {
+    private fun simulateUncaughtException(throwable: Throwable): SpanData {
         val rum = mockk<OpenTelemetryRum> {
             every { openTelemetry } returns rule.openTelemetry
         }
@@ -186,20 +184,33 @@ internal class CrashReportIntegrationTest {
         val handler = checkNotNull(Thread.getDefaultUncaughtExceptionHandler())
         val thread = Thread.currentThread()
         handler.uncaughtException(thread, throwable)
-        return rule.logRecords.single()
+        return waitForSingleResult { rule.spans }
+    }
+
+    private fun <T> waitForSingleResult(provider: () -> List<T>): T {
+        repeat(50) {
+            val items = provider()
+            if (items.size == 1) {
+                return items[0]
+            }
+            if (items.size > 1) {
+                error("Expected exactly one exported item, found ${items.size}")
+            }
+            Thread.sleep(20)
+        }
+        error("Expected exactly one exported item, found none")
     }
 
     /**
-     * Asserts that a log record was created with the expected crash details.
+     * Asserts that a span was created with the expected crash details.
      */
-    private fun LogRecordData.assertCrashCaptured(
+    private fun SpanData.assertCrashCaptured(
         expectedStacktrace: String,
         thread: Thread,
         expectedExcType: String,
         expectedExcMessage: String? = null,
     ) {
-        assertEquals("device.crash", eventName)
-        assertEquals(Severity.UNDEFINED_SEVERITY_NUMBER, severity)
+        assertEquals("device.crash", name)
 
         val attrs = attributes.asMap().mapKeys { it.key.key }
         assertEquals(expectedStacktrace, attrs[ExceptionAttributes.EXCEPTION_STACKTRACE.key])

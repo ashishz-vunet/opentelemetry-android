@@ -17,13 +17,21 @@ Then attach the observer once for each `NavBackStack`:
 ```kotlin
 @Composable
 fun AppNavigation(backStack: NavBackStack) {
-    VunetNavObserver(backStack = backStack)
+  val onBack = rememberVunetOnBack(backStack) { backStack.removeLastOrNull() }
+    VunetNav3Observer(backStack = backStack)
+  NavDisplay(
+    backStack = backStack,
+    onBack = onBack,
+    entryProvider = { key -> /* ... */ },
+  )
 }
 ```
 
 ## API
 
-- Public entrypoint: `VunetNavObserver(backStack: NavBackStack, nameOf: (NavKey) -> String = ...)`
+- Public entrypoints:
+  - `VunetNav3Observer(backStack: NavBackStack, nameOf: (NavKey) -> String = ...)`
+  - `rememberVunetOnBack(backStack: NavBackStack, onBack: () -> Unit): () -> Unit`
 - No explicit `OpenTelemetryRum` parameter is required from app code.
 
 ## Behavior
@@ -34,6 +42,10 @@ fun AppNavigation(backStack: NavBackStack) {
   - stack shrinks -> `pop`
   - same size with different top -> `replace`
   - identical top -> no-op
+- Trigger attribution:
+  - `push`/`replace` -> `navigation.trigger=unknown`
+  - `pop` from wrapped `onBack` callback -> `navigation.trigger=back_press`
+  - other `pop` operations (e.g. direct `removeLastOrNull`) -> `navigation.trigger=programmatic`
 - `nameOf` can be overridden for typed keys; default uses `simpleName`.
 
 ## Schema

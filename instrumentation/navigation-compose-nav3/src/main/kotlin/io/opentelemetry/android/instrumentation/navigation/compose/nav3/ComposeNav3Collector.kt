@@ -23,6 +23,11 @@ internal class ComposeNav3Collector(
         NavigationSpanEmitter(openTelemetryRum.openTelemetry.getTracer(INSTRUMENTATION_SCOPE))
     private val clock = openTelemetryRum.clock
     private var previousSnapshot: List<NavKey> = emptyList()
+    private var pendingBackPressTimestampNanos: Long? = null
+
+    fun recordBackPress() {
+        pendingBackPressTimestampNanos = clock.now()
+    }
 
     fun onBackStackChanged(snapshot: List<NavKey>) {
         val sourceKey = previousSnapshot.lastOrNull()
@@ -38,6 +43,7 @@ internal class ComposeNav3Collector(
         }
 
         val transitionType = inferTransition(previousSnapshot, snapshot)
+        val navigationTrigger = resolveTrigger(transitionType)
         val sourceNode = sourceKey?.toNavigationNode()
         val destinationNode = destinationKey?.toNavigationNode()
         if (destinationNode == null) {
@@ -53,6 +59,7 @@ internal class ComposeNav3Collector(
                 entryType = NavigationEntryType.INTERNAL,
                 timestampNanos = clock.now(),
             ),
+            navigationTrigger = navigationTrigger.value,
         )
 
         previousSnapshot = snapshot
@@ -68,9 +75,45 @@ internal class ComposeNav3Collector(
             else -> NavigationTransitionType.REPLACE
         }
 
+    private fun resolveTrigger(transitionType: NavigationTransitionType): NavigationTrigger =
+        when (transitionType) {
+            NavigationTransitionType.POP -> {
+                if (consumeBackPressSignal()) {
+                    NavigationTrigger.BACK_PRESS
+                } else {
+                    NavigationTrigger.PROGRAMMATIC
+                }
+            }
+
+            NavigationTransitionType.PUSH,
+            NavigationTransitionType.REPLACE,
+            -> {
+                pendingBackPressTimestampNanos = null
+                NavigationTrigger.UNKNOWN
+            }
+        }
+
+    private fun consumeBackPressSignal(): Boolean {
+        val backPressTimestampNanos = pendingBackPressTimestampNanos ?: return false
+        pendingBackPressTimestampNanos = null
+        return clock.now() - backPressTimestampNanos <= BACK_PRESS_SIGNAL_TTL_NANOS
+    }
+
     private fun NavKey.toNavigationNode(): NavigationNode =
         NavigationNode(
             type = NavigationNodeType.COMPOSE_ROUTE,
             name = nameOf(this),
         )
+
+    private enum class NavigationTrigger(
+        val value: String,
+    ) {
+        BACK_PRESS("back_press"),
+        PROGRAMMATIC("programmatic"),
+        UNKNOWN("unknown"),
+    }
+
+    private companion object {
+        const val BACK_PRESS_SIGNAL_TTL_NANOS: Long = 1_000_000_000L
+    }
 }

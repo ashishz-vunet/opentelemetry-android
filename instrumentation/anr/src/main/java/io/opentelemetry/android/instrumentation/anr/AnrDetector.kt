@@ -29,7 +29,6 @@ internal class AnrDetector(
     fun start() {
         val uiHandler = Handler(mainLooper)
         val anrTracer = openTelemetry.tracerProvider.get("io.opentelemetry.anr")
-        val anrLogger = openTelemetry.logsBridge.get("io.opentelemetry.anr")
         val anrWatcher = AnrWatcher(uiHandler, mainLooper.thread, anrTracer, additionalExtractors)
 
         val listener = AnrDetectorToggler(anrWatcher, scheduler)

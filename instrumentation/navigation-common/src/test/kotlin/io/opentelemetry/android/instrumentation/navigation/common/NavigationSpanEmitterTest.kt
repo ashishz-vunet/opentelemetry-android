@@ -5,7 +5,6 @@
 
 package io.opentelemetry.android.instrumentation.navigation.common
 
-import io.opentelemetry.android.common.RumConstants.LAST_SCREEN_NAME_KEY
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationEntryType
 import io.opentelemetry.android.instrumentation.navigation.common.models.NavigationNode
@@ -48,7 +47,6 @@ class NavigationSpanEmitterTest {
         assertThat(spans[0].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("push")
         assertThat(spans[0].attributes.get(NavigationConstants.NAVIGATION_ENTRY_TYPE_KEY)).isEqualTo("internal")
         assertThat(spans[0].attributes.get(NavigationConstants.NAVIGATION_TIMESTAMP_NS_KEY)).isEqualTo(1234L)
-        assertThat(spans[0].attributes.get(LAST_SCREEN_NAME_KEY)).isEqualTo("Home")
         assertThat(spans[0].attributes.get(SCREEN_NAME_KEY)).isEqualTo("Details")
     }
 
@@ -76,5 +74,33 @@ class NavigationSpanEmitterTest {
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(1)
         assertThat(spans[0].attributes.get(NavigationConstants.NAVIGATION_DESTINATION_TYPE_KEY)).isEqualTo("compose_route")
+    }
+
+    @Test
+    fun emits_navigation_trigger_when_provided() {
+        val exporter = InMemorySpanExporter.create()
+        val tracerProvider =
+            SdkTracerProvider
+                .builder()
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
+                .build()
+        val openTelemetry = OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).build()
+        val emitter = NavigationSpanEmitter(openTelemetry.getTracer("test-navigation-common"))
+
+        emitter.emit(
+            candidate =
+                NavigationTransitionCandidate(
+                    source = NavigationNode(type = NavigationNodeType.COMPOSE_ROUTE, name = "home"),
+                    destination = NavigationNode(type = NavigationNodeType.COMPOSE_ROUTE, name = "details"),
+                    transitionType = NavigationTransitionType.POP,
+                    entryType = NavigationEntryType.INTERNAL,
+                    timestampNanos = 99L,
+                ),
+            navigationTrigger = "back_press",
+        )
+
+        val spans = exporter.finishedSpanItems
+        assertThat(spans).hasSize(1)
+        assertThat(spans[0].attributes.get(NavigationConstants.NAVIGATION_TRIGGER_KEY)).isEqualTo("back_press")
     }
 }

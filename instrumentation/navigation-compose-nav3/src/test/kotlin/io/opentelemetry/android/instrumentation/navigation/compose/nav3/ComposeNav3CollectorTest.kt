@@ -27,17 +27,19 @@ class ComposeNav3CollectorTest {
             .addSpanProcessor(SimpleSpanProcessor.create(exporter))
             .build()
     private val openTelemetry = OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).build()
+    private var nowNanos: Long = 1234L
     private val testClock =
         object : Clock {
-            override fun now(): Long = 1234L
+            override fun now(): Long = nowNanos
 
-            override fun nanoTime(): Long = 1234L
+            override fun nanoTime(): Long = nowNanos
         }
 
     @BeforeEach
     fun setUp() {
         exporter.reset()
         NavObserverRumHolder.clear()
+        nowNanos = 1234L
     }
 
     @Test
@@ -49,6 +51,7 @@ class ComposeNav3CollectorTest {
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(2)
         assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("push")
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRIGGER_KEY)).isEqualTo("unknown")
     }
 
     @Test
@@ -60,6 +63,35 @@ class ComposeNav3CollectorTest {
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(2)
         assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("pop")
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRIGGER_KEY)).isEqualTo("programmatic")
+    }
+
+    @Test
+    fun pop_after_recent_back_press_emits_back_press_trigger() {
+        val collector = createCollector()
+        collector.onBackStackChanged(listOf(key("home"), key("details")))
+
+        collector.recordBackPress()
+        nowNanos += 100L
+        collector.onBackStackChanged(listOf(key("home")))
+
+        val spans = exporter.finishedSpanItems
+        assertThat(spans).hasSize(2)
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRIGGER_KEY)).isEqualTo("back_press")
+    }
+
+    @Test
+    fun stale_back_press_signal_falls_back_to_programmatic() {
+        val collector = createCollector()
+        collector.onBackStackChanged(listOf(key("home"), key("details")))
+
+        collector.recordBackPress()
+        nowNanos += 1_000_000_001L
+        collector.onBackStackChanged(listOf(key("home")))
+
+        val spans = exporter.finishedSpanItems
+        assertThat(spans).hasSize(2)
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRIGGER_KEY)).isEqualTo("programmatic")
     }
 
     @Test
@@ -71,6 +103,7 @@ class ComposeNav3CollectorTest {
         val spans = exporter.finishedSpanItems
         assertThat(spans).hasSize(2)
         assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRANSITION_TYPE_KEY)).isEqualTo("replace")
+        assertThat(spans[1].attributes.get(NavigationConstants.NAVIGATION_TRIGGER_KEY)).isEqualTo("unknown")
     }
 
     @Test
