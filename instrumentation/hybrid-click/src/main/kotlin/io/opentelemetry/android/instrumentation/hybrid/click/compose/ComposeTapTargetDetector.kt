@@ -12,7 +12,6 @@ import android.view.ViewGroup
 import androidx.compose.ui.node.LayoutNode
 import androidx.compose.ui.node.Owner
 import androidx.compose.ui.semantics.SemanticsConfiguration
-import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsModifier
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -163,6 +162,7 @@ internal class ComposeTapTargetDetector(
      * 2. Text from child Text composables (e.g., button text)
      * 3. Modifier class name (fallback)
      */
+    @Suppress("unused") // Used reflectively by ClickEventGenerator
     private fun nodeToLabel(node: LayoutNode): String {
         val semanticsLabel = getMergedSemanticsLabel(node) ?: getNodeName(node)
         val childText = extractTextFromChildren(node)
@@ -232,13 +232,12 @@ internal class ComposeTapTargetDetector(
             var bestRank = Int.MAX_VALUE
             var bestLabel: String? = null
             for (semanticsNode in owner.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true)) {
-                val rank = rankBySemanticsId[semanticsNode.id] ?: continue
-                val semanticsLabel = semanticsLabelFrom(semanticsNode.config)
-                if (!semanticsLabel.isNullOrBlank() && rank < bestRank) {
-                    bestLabel = semanticsLabel
-                    bestRank = rank
-                    if (rank == 0) {
-                        break
+                val rank = rankBySemanticsId[semanticsNode.id]
+                if (rank != null) {
+                    val semanticsLabel = semanticsLabelFrom(semanticsNode.config)
+                    if (!semanticsLabel.isNullOrBlank() && rank < bestRank) {
+                        bestLabel = semanticsLabel
+                        bestRank = rank
                     }
                 }
             }

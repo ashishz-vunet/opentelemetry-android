@@ -5,20 +5,13 @@
 
 package io.opentelemetry.android.instrumentation.hybrid.click
 
-import android.view.MotionEvent
 import android.view.View
-import android.view.Window
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_VIEW
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapTarget
-import io.opentelemetry.android.instrumentation.hybrid.click.shared.UI_CLICK_SPAN_NAME
 import io.opentelemetry.android.instrumentation.hybrid.click.view.ViewTapTargetDetector
-import io.opentelemetry.api.trace.Span
-import io.opentelemetry.api.trace.SpanBuilder
-import io.opentelemetry.api.trace.Tracer
-import io.opentelemetry.context.Scope
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -32,9 +25,6 @@ class ClickEventGeneratorTest {
             x = 10L,
             y = 20L,
         )
-
-    private val window = mockk<Window>(relaxed = true)
-    private val tracer = mockk<Tracer>(relaxed = true)
 
     @Test
     fun `view detector used when compose detector returns null`() {

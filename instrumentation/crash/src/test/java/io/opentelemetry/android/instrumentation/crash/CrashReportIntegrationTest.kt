@@ -104,7 +104,7 @@ internal class CrashReportIntegrationTest {
             thread = Thread.currentThread(),
             expectedExcType = "java.lang.IllegalArgumentException",
         )
-        val attributes = rule.logRecords.single().attributes
+        val attributes = waitForSingleResult { rule.logRecords }.attributes
         val attrs = attributes.asMap().mapKeys { it.key.key }
         assertEquals("value1", attrs["key1"])
         assertEquals("value2", attrs["key2"])
@@ -160,7 +160,7 @@ internal class CrashReportIntegrationTest {
         }
         latch.await(100, TimeUnit.MILLISECONDS)
 
-        val log = rule.logRecords.single()
+        val log = waitForSingleResult { rule.logRecords }
         log.assertCrashCaptured(
             expectedStacktrace = exc.stackTraceToString(),
             thread = thread,
@@ -186,7 +186,21 @@ internal class CrashReportIntegrationTest {
         val handler = checkNotNull(Thread.getDefaultUncaughtExceptionHandler())
         val thread = Thread.currentThread()
         handler.uncaughtException(thread, throwable)
-        return rule.logRecords.single()
+        return waitForSingleResult { rule.logRecords }
+    }
+
+    private fun <T> waitForSingleResult(provider: () -> List<T>): T {
+        repeat(50) {
+            val items = provider()
+            if (items.size == 1) {
+                return items[0]
+            }
+            if (items.size > 1) {
+                error("Expected exactly one exported item, found ${items.size}")
+            }
+            Thread.sleep(20)
+        }
+        error("Expected exactly one exported item, found none")
     }
 
     /**
