@@ -18,7 +18,7 @@ Then attach the observer once for each `NavBackStack`:
 @Composable
 fun AppNavigation(backStack: NavBackStack) {
   val onBack = rememberVunetOnBack(backStack) { backStack.removeLastOrNull() }
-    VunetNavObserver(backStack = backStack)
+    VunetNav3Observer(backStack = backStack)
   NavDisplay(
     backStack = backStack,
     onBack = onBack,
@@ -30,7 +30,7 @@ fun AppNavigation(backStack: NavBackStack) {
 ## API
 
 - Public entrypoints:
-  - `VunetNavObserver(backStack: NavBackStack, nameOf: (NavKey) -> String = ...)`
+  - `VunetNav3Observer(backStack: NavBackStack, nameOf: (NavKey) -> String = ...)`
   - `rememberVunetOnBack(backStack: NavBackStack, onBack: () -> Unit): () -> Unit`
 - No explicit `OpenTelemetryRum` parameter is required from app code.
 

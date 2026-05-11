@@ -13,6 +13,6 @@ internal object ComposeNav2DestinationNameExtractor {
         if (!route.isNullOrBlank()) {
             return route
         }
-        return destination.displayName
+        return destination.id.toString()
     }
 }

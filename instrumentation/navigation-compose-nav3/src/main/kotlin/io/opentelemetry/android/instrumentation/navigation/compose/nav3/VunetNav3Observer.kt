@@ -14,8 +14,15 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 
+/**
+ * Installs Compose Navigation 3 back stack observation for the provided [backStack].
+ *
+ * Call this once per [NavBackStack] from a stable place in your Compose tree.
+ * The observer remains active while the composable is in composition.
+ */
 @Composable
-fun VunetNavObserver(
+@Suppress("FunctionName")
+fun VunetNav3Observer(
     backStack: NavBackStack<NavKey>,
     nameOf: (NavKey) -> String = { it::class.simpleName.orEmpty() },
 ) {
@@ -34,7 +41,14 @@ fun VunetNavObserver(
     }
 }
 
+/**
+ * Wraps an [onBack] callback and records a back-press trigger when possible.
+ *
+ * Use this wrapper for your navigation back action so pop transitions can be
+ * attributed to a back press when [VunetNav3Observer] is active for the same [backStack].
+ */
 @Composable
+@Suppress("FunctionName")
 fun rememberVunetOnBack(
     backStack: NavBackStack<NavKey>,
     onBack: () -> Unit,

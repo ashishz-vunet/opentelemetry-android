@@ -6,8 +6,8 @@ public final class io/opentelemetry/android/instrumentation/navigation/compose/n
 	public fun uninstall (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
 }
 
-public final class io/opentelemetry/android/instrumentation/navigation/compose/nav3/VunetNavObserverKt {
-	public static final fun VunetNavObserver (Landroidx/navigation3/runtime/NavBackStack;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
+public final class io/opentelemetry/android/instrumentation/navigation/compose/nav3/VunetNav3ObserverKt {
+	public static final fun VunetNav3Observer (Landroidx/navigation3/runtime/NavBackStack;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
 	public static final fun rememberVunetOnBack (Landroidx/navigation3/runtime/NavBackStack;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)Lkotlin/jvm/functions/Function0;
 }
 

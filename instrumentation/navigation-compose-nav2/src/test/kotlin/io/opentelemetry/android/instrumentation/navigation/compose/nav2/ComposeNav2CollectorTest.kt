@@ -121,7 +121,6 @@ class ComposeNav2CollectorTest {
         mockk {
             every { this@mockk.route } returns route
             every { this@mockk.id } returns id
-            every { this@mockk.displayName } returns route
         }
 
     private fun createCollector(
