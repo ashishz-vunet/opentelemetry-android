@@ -20,24 +20,25 @@ internal class FragmentTracer(
 ) {
     private val fragmentName: String = fragment.javaClass.simpleName
 
-    fun startSpanIfNoneInProgress(action: String): FragmentTracer {
+    fun startSpanIfNoneInProgress(lifecycleEvent: String): FragmentTracer {
         if (activeSpan.spanInProgress()) {
             return this
         }
-        activeSpan.startSpan { createSpan(action) }
+        activeSpan.startSpan { createLifecycleSpan(lifecycleEvent) }
         return this
     }
 
     fun startFragmentCreation(): FragmentTracer {
-        activeSpan.startSpan { createSpan("Created") }
+        activeSpan.startSpan { createLifecycleSpan("Created") }
         return this
     }
 
-    private fun createSpan(spanName: String): Span {
+    private fun createLifecycleSpan(lifecycleEvent: String): Span {
         val span =
             tracer
-                .spanBuilder(spanName)
+                .spanBuilder(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME)
                 .setAttribute(FRAGMENT_NAME_KEY, fragmentName)
+                .setAttribute(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY, lifecycleEvent)
                 .startSpan()
         // do this after the span is started, so we can override the default screen.name set by the
         // RumAttributeAppender.

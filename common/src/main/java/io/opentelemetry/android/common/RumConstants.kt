@@ -28,7 +28,19 @@ object RumConstants {
     @JvmField
     val BATTERY_PERCENT_KEY: AttributeKey<Double> = AttributeKey.doubleKey("battery.percent")
 
-    const val APP_START_SPAN_NAME: String = "AppStart"
+    const val APP_START_SPAN_NAME: String = "app.start"
+
+    const val ACTIVITY_LIFECYCLE_SPAN_NAME: String = "activity.lifecycle"
+
+    @JvmField
+    val ACTIVITY_LIFECYCLE_EVENT_KEY: AttributeKey<String> =
+        AttributeKey.stringKey("activity.lifecycle.event")
+
+    const val FRAGMENT_LIFECYCLE_SPAN_NAME: String = "fragment.lifecycle"
+
+    @JvmField
+    val FRAGMENT_LIFECYCLE_EVENT_KEY: AttributeKey<String> =
+        AttributeKey.stringKey("fragment.lifecycle.event")
 
     object Events {
         const val INIT_EVENT_STARTED: String = "rum.sdk.init.started"

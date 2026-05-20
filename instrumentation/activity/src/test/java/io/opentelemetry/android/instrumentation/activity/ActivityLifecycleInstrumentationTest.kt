@@ -50,7 +50,7 @@ class ActivityLifecycleInstrumentationTest {
         val startupSpan: Span = mockk()
 
         every { openTelemetry.getTracer("io.opentelemetry.lifecycle") }.returns(tracer)
-        every { tracer.spanBuilder("AppStart") }.returns(startupSpanBuilder)
+        every { tracer.spanBuilder(RumConstants.APP_START_SPAN_NAME) }.returns(startupSpanBuilder)
         every { startupSpanBuilder.setStartTimestamp(any(), any()) }.returns(startupSpanBuilder)
         every { startupSpanBuilder.setAttribute(RumConstants.START_TYPE_KEY, "cold") }.returns(
             startupSpanBuilder,
@@ -64,7 +64,7 @@ class ActivityLifecycleInstrumentationTest {
         activityLifecycleInstrumentation.install(application, openTelemetryRum)
 
         verify {
-            tracer.spanBuilder("AppStart")
+            tracer.spanBuilder(RumConstants.APP_START_SPAN_NAME)
         }
         verify {
             startupSpanBuilder.setAttribute(RumConstants.START_TYPE_KEY, "cold")
