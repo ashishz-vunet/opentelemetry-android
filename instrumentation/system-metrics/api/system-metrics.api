@@ -1,0 +1,10 @@
+public final class io/opentelemetry/android/instrumentation/systemmetrics/SystemMetricsInstrumentation : io/opentelemetry/android/instrumentation/AndroidInstrumentation {
+	public fun <init> ()V
+	public final fun getCollectionInterval ()Ljava/time/Duration;
+	public final fun getEmitAsSpans ()Z
+	public fun getName ()Ljava/lang/String;
+	public fun install (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
+	public final fun setCollectionInterval (Ljava/time/Duration;)V
+	public final fun setEmitAsSpans (Z)V
+}
+
