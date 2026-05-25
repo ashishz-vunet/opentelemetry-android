@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### ⚠️⚠️ Breaking changes
+
+- Activity and fragment lifecycle spans now use stable span names with an event attribute:
+  - Activity lifecycle: span name `activity.lifecycle`, attribute `activity.lifecycle.event` (`Created`, `Resumed`, `Paused`, `Stopped`, `Destroyed`, `Restarted`)
+  - Fragment lifecycle: span name `fragment.lifecycle`, attribute `fragment.lifecycle.event` (`Created`, `Restored`, `Resumed`, `Paused`, `Stopped`, `Destroyed`, `ViewDestroyed`, `Detached`)
+  - App startup span renamed from `AppStart` to `app.start` (`RumConstants.APP_START_SPAN_NAME`)
+  - Span events (`activityPreCreated`, `fragmentResumed`, etc.) are unchanged
+
 ## Version 1.3.0 (2026-04-22)
 
 ### ⚠️⚠️ Breaking changes

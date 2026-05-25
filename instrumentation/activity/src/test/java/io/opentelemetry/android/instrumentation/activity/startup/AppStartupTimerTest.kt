@@ -40,7 +40,7 @@ internal class AppStartupTimerTest {
         assertEquals(1, spans.size)
         val spanData = spans[0]
 
-        assertEquals("AppStart", spanData.name)
+        assertEquals(RumConstants.APP_START_SPAN_NAME, spanData.name)
         assertEquals(
             "cold",
             spanData.attributes.get(RumConstants.START_TYPE_KEY),

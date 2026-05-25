@@ -44,7 +44,7 @@ internal class AppStartupTimer {
         firstPossibleTimestamp = startupClock.now()
         val appStart =
             tracer
-                .spanBuilder("AppStart")
+                .spanBuilder(RumConstants.APP_START_SPAN_NAME)
                 .setStartTimestamp(firstPossibleTimestamp, TimeUnit.NANOSECONDS)
                 .setAttribute(RumConstants.START_TYPE_KEY, "cold")
                 .startSpan()

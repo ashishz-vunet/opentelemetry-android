@@ -14,7 +14,7 @@ This instrumentation produces the following telemetry:
 ### Application Start
 
 * Type: Span
-* Name: `AppStart`
+* Name: `app.start`
 * Description: This span is created and started when the Activity instrumentation is
   installed. It is ended when the initial activity reaches PostPaused, PostStopped, or PostDestroyed.
 * Attributes:
@@ -23,7 +23,7 @@ This instrumentation produces the following telemetry:
 ### Activity state change
 
 * Type: Span
-* Name: {`Created` | `Resumed` | `Paused` | `Stopped` | `Destroyed` | `Restarted` |} (depends on the activity state transition)
+* Name: `activity.lifecycle`
 * Description: As the activity transitions between states, a span will be created to represent the
   lifecycle of that state. Events are added for subsequent minor state changes.
 * SpanEvents: {
@@ -34,6 +34,7 @@ This instrumentation produces the following telemetry:
   `activityPreStopped` | `activityStopped` | `activityPostStopped` |
   `activityPreDestroyed` | `activityDestroyed` | `activityPostDestroyed` }
 * Attributes:
+  * `activity.lifecycle.event`: { `Created` | `Resumed` | `Paused` | `Stopped` | `Destroyed` | `Restarted` }
   * `activity.name`:  name of activity
   * `screen.name`:  name of screen
   * `last.screen.name`:  name of screen, only when span contains the `activityPostResumed` event.

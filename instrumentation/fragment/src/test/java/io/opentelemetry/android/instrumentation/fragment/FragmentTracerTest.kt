@@ -49,7 +49,8 @@ internal class FragmentTracerTest {
         trackableTracer.startFragmentCreation()
         trackableTracer.endActiveSpan()
         val span = this.singleSpan
-        assertEquals("Created", span.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, span.name)
+        assertEquals("Created", span.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
     }
 
     @Test

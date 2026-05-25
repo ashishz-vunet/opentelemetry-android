@@ -16,6 +16,7 @@ import io.opentelemetry.android.internal.services.visiblescreen.VisibleScreenTra
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
 import io.opentelemetry.sdk.trace.data.EventData
+import io.opentelemetry.sdk.trace.data.SpanData
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -56,7 +57,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val spanData = spans[0]
 
-        assertEquals("Created", spanData.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, spanData.name)
+        assertEquals("Created", spanData.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             spanData.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
@@ -91,7 +93,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val spanData = spans[0]
 
-        assertEquals("Restored", spanData.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, spanData.name)
+        assertEquals("Restored", spanData.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             spanData.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
@@ -124,7 +127,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val spanData = spans[0]
 
-        assertEquals("Resumed", spanData.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, spanData.name)
+        assertEquals("Resumed", spanData.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             spanData.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
@@ -150,7 +154,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val spanData = spans[0]
 
-        assertEquals("Paused", spanData.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, spanData.name)
+        assertEquals("Paused", spanData.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             spanData.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
@@ -167,7 +172,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val stopSpan = spans[1]
 
-        assertEquals("Stopped", stopSpan.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, stopSpan.name)
+        assertEquals("Stopped", stopSpan.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             stopSpan.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
@@ -185,77 +191,29 @@ internal class RumFragmentLifecycleCallbacksTest {
 
     @Test
     fun fragmentDetachedFromActive() {
-        val testHarness = fragmentCallbackTestHarness
-
         val fragment = mockk<Fragment>()
-        testHarness.runFragmentDetachedFromActiveLifecycle(fragment)
+        fragmentCallbackTestHarness.runFragmentDetachedFromActiveLifecycle(fragment)
 
         val spans = otelTesting.spans
-
         assertEquals(4, spans.size)
 
-        val pauseSpan = spans[0]
-        val stopSpan = spans[1]
+        assertFragmentLifecycleSpan(spans[0], "Paused", fragment)
+        assertFragmentLifecycleSpanEvents(spans[0], 1, "fragmentPaused")
 
-        assertEquals("Paused", pauseSpan.name)
-        assertEquals(
-            fragment.javaClass.simpleName,
-            pauseSpan.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
+        assertFragmentLifecycleSpan(spans[1], "Stopped", fragment)
+        assertFragmentLifecycleSpanEvents(spans[1], 1, "fragmentStopped")
+
+        assertFragmentLifecycleSpan(spans[2], "ViewDestroyed", fragment)
+        assertFragmentLifecycleSpanEvents(spans[2], 1, "fragmentViewDestroyed")
+
+        assertFragmentLifecycleSpan(
+            spans[3],
+            "Destroyed",
+            fragment,
+            requireFragmentNameValue = false,
+            requireScreenName = false,
         )
-        assertEquals(
-            fragment.javaClass.simpleName,
-            pauseSpan.attributes.get(RumConstants.SCREEN_NAME_KEY),
-        )
-        assertNull(pauseSpan.attributes.get(RumConstants.LAST_SCREEN_NAME_KEY))
-
-        var events: List<EventData> = pauseSpan.events
-        assertEquals(1, events.size)
-        checkEventExists(events, "fragmentPaused")
-
-        assertEquals("Stopped", stopSpan.name)
-        assertEquals(
-            fragment.javaClass.simpleName,
-            stopSpan.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
-        )
-        assertEquals(
-            fragment.javaClass.simpleName,
-            stopSpan.attributes.get(RumConstants.SCREEN_NAME_KEY),
-        )
-        assertNull(stopSpan.attributes.get(RumConstants.LAST_SCREEN_NAME_KEY))
-
-        val stopEvents = stopSpan.events
-        assertEquals(1, stopEvents.size)
-        checkEventExists(stopEvents, "fragmentStopped")
-
-        val destroyViewSpan = spans[2]
-
-        assertEquals("ViewDestroyed", destroyViewSpan.name)
-        assertEquals(
-            fragment.javaClass.simpleName,
-            destroyViewSpan.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
-        )
-        assertEquals(
-            fragment.javaClass.simpleName,
-            destroyViewSpan.attributes.get(RumConstants.SCREEN_NAME_KEY),
-        )
-        assertNull(destroyViewSpan.attributes.get(RumConstants.LAST_SCREEN_NAME_KEY))
-
-        events = destroyViewSpan.events
-        assertEquals(1, events.size)
-        checkEventExists(events, "fragmentViewDestroyed")
-
-        val detachSpan = spans[3]
-
-        assertEquals("Destroyed", detachSpan.name)
-        Assertions.assertNotNull(
-            detachSpan.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
-        )
-        assertNull(detachSpan.attributes.get(RumConstants.LAST_SCREEN_NAME_KEY))
-
-        events = detachSpan.events
-        assertEquals(2, events.size)
-        checkEventExists(events, "fragmentDestroyed")
-        checkEventExists(events, "fragmentDetached")
+        assertFragmentLifecycleSpanEvents(spans[3], 2, "fragmentDestroyed", "fragmentDetached")
     }
 
     @Test
@@ -270,7 +228,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val span = spans[0]
 
-        assertEquals("ViewDestroyed", span.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, span.name)
+        assertEquals("ViewDestroyed", span.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             span.attributes.get(RumConstants.SCREEN_NAME_KEY),
@@ -298,7 +257,11 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val destroyViewSpan = spans[0]
 
-        assertEquals("ViewDestroyed", destroyViewSpan.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, destroyViewSpan.name)
+        assertEquals(
+            "ViewDestroyed",
+            destroyViewSpan.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY),
+        )
         assertEquals(
             fragment.javaClass.simpleName,
             destroyViewSpan.attributes.get(RumConstants.SCREEN_NAME_KEY),
@@ -315,7 +278,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val detachSpan = spans[1]
 
-        assertEquals("Destroyed", detachSpan.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, detachSpan.name)
+        assertEquals("Destroyed", detachSpan.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             detachSpan.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
@@ -340,7 +304,8 @@ internal class RumFragmentLifecycleCallbacksTest {
 
         val detachSpan = spans[0]
 
-        assertEquals("Detached", detachSpan.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, detachSpan.name)
+        assertEquals("Detached", detachSpan.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
         assertEquals(
             fragment.javaClass.simpleName,
             detachSpan.attributes.get(RumConstants.SCREEN_NAME_KEY),
@@ -354,6 +319,42 @@ internal class RumFragmentLifecycleCallbacksTest {
         val events = detachSpan.events
         assertEquals(1, events.size)
         checkEventExists(events, "fragmentDetached")
+    }
+
+    private fun assertFragmentLifecycleSpan(
+        span: SpanData,
+        lifecycleEvent: String,
+        fragment: Fragment,
+        requireFragmentNameValue: Boolean = true,
+        requireScreenName: Boolean = true,
+    ) {
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, span.name)
+        assertEquals(lifecycleEvent, span.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
+        if (requireFragmentNameValue) {
+            assertEquals(
+                fragment.javaClass.simpleName,
+                span.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
+            )
+        } else {
+            Assertions.assertNotNull(span.attributes.get(FragmentTracer.FRAGMENT_NAME_KEY))
+        }
+        if (requireScreenName) {
+            assertEquals(
+                fragment.javaClass.simpleName,
+                span.attributes.get(RumConstants.SCREEN_NAME_KEY),
+            )
+        }
+        assertNull(span.attributes.get(RumConstants.LAST_SCREEN_NAME_KEY))
+    }
+
+    private fun assertFragmentLifecycleSpanEvents(
+        span: SpanData,
+        expectedEventCount: Int,
+        vararg eventNames: String,
+    ) {
+        val events = span.events
+        assertEquals(expectedEventCount, events.size)
+        eventNames.forEach { checkEventExists(events, it) }
     }
 
     private fun checkEventExists(
