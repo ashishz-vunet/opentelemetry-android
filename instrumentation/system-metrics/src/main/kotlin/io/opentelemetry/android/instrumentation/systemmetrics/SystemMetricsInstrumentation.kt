@@ -31,14 +31,6 @@ class SystemMetricsInstrumentation : AndroidInstrumentation {
     /** Interval at which all system metrics are sampled. Default: 30 seconds. */
     var collectionInterval: Duration = Duration.ofSeconds(30)
 
-    /**
-     * When true, emits a `process.system.metrics` span every [collectionInterval] with all
-     * metric values as span attributes. Useful for trace-only backends (Jaeger, Zipkin) or
-     * when metric snapshots need to be stitched into a trace.
-     * Default: false (metrics-only via ObservableGauge).
-     */
-    var emitAsSpans: Boolean = false
-
     override val name: String = "system-metrics"
 
     private val installed = AtomicBoolean(false)
@@ -62,20 +54,16 @@ class SystemMetricsInstrumentation : AndroidInstrumentation {
         registerProcessMetrics(meter, cpuReader, memoryReader, threadReader)
         registerDeviceMetrics(meter, deviceReader)
 
-        if (emitAsSpans) {
-            val registry = ActiveSpanRegistry()
-            // Inject the registry as a SpanProcessor into the already-built SdkTracerProvider
-            // so it receives onStart/onEnd callbacks for every span created in the app.
-            val sdk = openTelemetryRum.openTelemetry as? OpenTelemetrySdk
-            sdk?.let { injectSpanProcessor(it, registry) }
-            SystemMetricsSpanEmitter(
-                openTelemetry = openTelemetryRum.openTelemetry,
-                scheduler = Executors.newSingleThreadScheduledExecutor(),
-                intervalSeconds = collectionInterval.seconds,
-                activeSpanRegistry = registry,
-                deviceReader = deviceReader,
-            ).start()
-        }
+        val registry = ActiveSpanRegistry()
+        val sdk = openTelemetryRum.openTelemetry as? OpenTelemetrySdk
+        sdk?.let { injectSpanProcessor(it, registry) }
+        SystemMetricsSpanEmitter(
+            openTelemetry = openTelemetryRum.openTelemetry,
+            scheduler = Executors.newSingleThreadScheduledExecutor(),
+            intervalSeconds = collectionInterval.seconds,
+            activeSpanRegistry = registry,
+            deviceReader = deviceReader,
+        ).start()
     }
 
     private fun registerProcessMetrics(
