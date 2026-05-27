@@ -15,6 +15,8 @@ import io.opentelemetry.sdk.trace.SpanProcessor
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 
+private const val COLLECTION_INTERVAL_SECONDS = 30L
+
 /**
  * Entry point for system metrics instrumentation.
  *
@@ -23,7 +25,7 @@ import java.util.concurrent.ScheduledExecutorService
  * standalone `"app.metrics"` span when no user span is in flight.
  */
 @AutoService(AndroidInstrumentation::class)
-internal class SystemMetricsInstrumentation : AndroidInstrumentation {
+class SystemMetricsInstrumentation : AndroidInstrumentation {
     override val name: String = "system-metrics"
 
     @Volatile private var scheduler: ScheduledExecutorService? = null
@@ -62,10 +64,6 @@ internal class SystemMetricsInstrumentation : AndroidInstrumentation {
     ) {
         scheduler?.shutdownNow()
         scheduler = null
-    }
-
-    private companion object {
-        const val COLLECTION_INTERVAL_SECONDS = 30L
     }
 
     /**
