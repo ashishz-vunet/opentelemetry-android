@@ -6,198 +6,74 @@
 package io.opentelemetry.android.instrumentation.systemmetrics
 
 import android.content.Context
+import android.util.Log
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
-import io.opentelemetry.api.common.AttributeKey
-import io.opentelemetry.api.common.Attributes
-import io.opentelemetry.api.metrics.Meter
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.trace.SpanProcessor
-import java.time.Duration
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Entry point for system metrics instrumentation.
  *
- * Registers observable gauges for CPU, memory, and thread metrics using the
- * OpenTelemetry [io.opentelemetry.sdk.metrics.SdkMeterProvider] already configured
- * in the SDK. Metrics are collected at the configured [collectionInterval] by the
- * SDK's [io.opentelemetry.sdk.metrics.export.PeriodicMetricReader].
+ * Periodically captures a snapshot of CPU, memory, thread, and device metrics and
+ * delivers it as an `"app.metrics"` event on the currently active span, or as a
+ * standalone `"app.metrics"` span when no user span is in flight.
  */
 @AutoService(AndroidInstrumentation::class)
-class SystemMetricsInstrumentation : AndroidInstrumentation {
-    /** Interval at which all system metrics are sampled. Default: 30 seconds. */
-    var collectionInterval: Duration = Duration.ofSeconds(30)
-
+internal class SystemMetricsInstrumentation : AndroidInstrumentation {
     override val name: String = "system-metrics"
 
-    private val installed = AtomicBoolean(false)
+    // Single atomic reference encodes both "is installed" and "which executor to stop".
+    // This avoids a race where uninstall() reads a null executor before install() assigns it.
+    private val executorRef = AtomicReference<ScheduledExecutorService?>(null)
 
     override fun install(
         context: Context,
         openTelemetryRum: OpenTelemetryRum,
     ) {
-        if (!installed.compareAndSet(false, true)) return
-
-        val meter =
-            openTelemetryRum.openTelemetry
-                .meterProvider
-                .get("io.opentelemetry.android.system-metrics")
-
-        val cpuReader = CpuMetricsReader()
-        val memoryReader = MemoryMetricsReader()
-        val threadReader = ThreadMetricsReader()
-        val deviceReader = DeviceMetricsReader(context)
-
-        registerProcessMetrics(meter, cpuReader, memoryReader, threadReader)
-        registerDeviceMetrics(meter, deviceReader)
+        val scheduler = Executors.newSingleThreadScheduledExecutor { r ->
+            Thread(r, "otel-system-metrics").apply {
+                isDaemon = true
+                // Log and keep the executor alive if a scheduled task throws an unchecked exception.
+                // Without this, a RuntimeException from any reader call would silently cancel all
+                // future metric emissions for the remainder of the app's lifecycle.
+                setUncaughtExceptionHandler { _, e ->
+                    Log.e("OpenTelemetryRum", "SystemMetrics: uncaught exception on scheduler thread", e)
+                }
+            }
+        }
+        if (!executorRef.compareAndSet(null, scheduler)) {
+            // Already installed — shut down the executor we just created and bail out.
+            scheduler.shutdownNow()
+            return
+        }
 
         val registry = ActiveSpanRegistry()
         val sdk = openTelemetryRum.openTelemetry as? OpenTelemetrySdk
         sdk?.let { injectSpanProcessor(it, registry) }
+
         SystemMetricsSpanEmitter(
             openTelemetry = openTelemetryRum.openTelemetry,
-            scheduler = Executors.newSingleThreadScheduledExecutor(),
-            intervalSeconds = collectionInterval.seconds,
+            scheduler = scheduler,
+            intervalSeconds = COLLECTION_INTERVAL_SECONDS,
             activeSpanRegistry = registry,
-            deviceReader = deviceReader,
+            deviceReader = DefaultDeviceMetricsReader(context),
         ).start()
     }
 
-    private fun registerProcessMetrics(
-        meter: Meter,
-        cpuReader: CpuMetricsReader,
-        memoryReader: MemoryMetricsReader,
-        threadReader: ThreadMetricsReader,
+    override fun uninstall(
+        context: Context,
+        openTelemetryRum: OpenTelemetryRum,
     ) {
-        meter
-            .gaugeBuilder("process.cpu.usage")
-            .setDescription("CPU usage of this process as a percentage (0–100)")
-            .setUnit("%")
-            .buildWithCallback { measurement ->
-                measurement.record(cpuReader.readCpuUsagePercent())
-            }
-
-        meter
-            .gaugeBuilder("process.runtime.jvm.memory.heap.used")
-            .setDescription("Java heap memory currently used by this process")
-            .setUnit("By")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(memoryReader.readHeapUsedBytes())
-            }
-
-        meter
-            .gaugeBuilder("process.runtime.jvm.memory.native.used")
-            .setDescription("Native heap memory currently allocated by this process")
-            .setUnit("By")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(memoryReader.readNativeHeapUsedBytes())
-            }
-
-        meter
-            .gaugeBuilder("process.memory.pss")
-            .setDescription("Proportional Set Size memory for this process")
-            .setUnit("kBy")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(memoryReader.readPssKb())
-            }
-
-        meter
-            .gaugeBuilder("process.thread.count")
-            .setDescription("Total number of threads currently active in this process")
-            .setUnit("{thread}")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(threadReader.readThreadCount())
-            }
-
-        meter
-            .gaugeBuilder("process.thread.count.by_state")
-            .setDescription("Thread count grouped by thread state")
-            .setUnit("{thread}")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                threadReader.readThreadCountByState().forEach { (state, count) ->
-                    measurement.record(
-                        count,
-                        Attributes.of(
-                            AttributeKey.stringKey("thread.state"),
-                            state,
-                        ),
-                    )
-                }
-            }
+        executorRef.getAndSet(null)?.shutdownNow()
     }
 
-    private fun registerDeviceMetrics(
-        meter: Meter,
-        deviceReader: DeviceMetricsReader,
-    ) {
-        meter
-            .gaugeBuilder("system.memory.available")
-            .setDescription("Available (free) RAM on the device")
-            .setUnit("By")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(deviceReader.readAvailableRamBytes())
-            }
-
-        meter
-            .gaugeBuilder("system.memory.total")
-            .setDescription("Total physical RAM on the device")
-            .setUnit("By")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(deviceReader.readTotalRamBytes())
-            }
-
-        meter
-            .gaugeBuilder("system.memory.low")
-            .setDescription("1 if the device is in a low-memory state, 0 otherwise")
-            .setUnit("1")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(deviceReader.readLowMemoryFlag())
-            }
-
-        meter
-            .gaugeBuilder("system.battery.level")
-            .setDescription("Battery charge level as a percentage (0–100)")
-            .setUnit("%")
-            .buildWithCallback { measurement ->
-                measurement.record(deviceReader.readBatteryPercent())
-            }
-
-        meter
-            .gaugeBuilder("system.battery.temperature")
-            .setDescription("Battery temperature in degrees Celsius")
-            .setUnit("Cel")
-            .buildWithCallback { measurement ->
-                measurement.record(deviceReader.readBatteryTemperatureCelsius())
-            }
-
-        meter
-            .gaugeBuilder("system.disk.free")
-            .setDescription("Free disk space on the internal data partition")
-            .setUnit("By")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(deviceReader.readDiskFreeBytes())
-            }
-
-        meter
-            .gaugeBuilder("system.disk.total")
-            .setDescription("Total disk space on the internal data partition")
-            .setUnit("By")
-            .ofLongs()
-            .buildWithCallback { measurement ->
-                measurement.record(deviceReader.readDiskTotalBytes())
-            }
+    private companion object {
+        const val COLLECTION_INTERVAL_SECONDS = 30L
     }
 
     /**
@@ -205,9 +81,9 @@ class SystemMetricsInstrumentation : AndroidInstrumentation {
      * reflection. This is necessary because [AndroidInstrumentation.install] is called after
      * the SDK is fully constructed, so the standard builder API is no longer available.
      *
-     * Reflection targets are both package-private JVM classes in the OTel SDK — not Android
-     * platform internals — so this works across all supported Android API levels.
-     * A failure here degrades gracefully: span events fall back to standalone spans.
+     * Reflection targets package-private JVM fields in the OTel SDK, not Android platform
+     * internals. A failure degrades gracefully: [Log.w] is emitted and metrics fall back to
+     * standalone `"app.metrics"` spans.
      */
     @Suppress("TooGenericExceptionCaught")
     private fun injectSpanProcessor(
@@ -225,8 +101,15 @@ class SystemMetricsInstrumentation : AndroidInstrumentation {
             val existing = processorField.get(sharedState) as SpanProcessor
 
             processorField.set(sharedState, SpanProcessor.composite(existing, processor))
-        } catch (e: Exception) {
-            // Graceful degradation: metrics will emit as standalone spans instead of events.
+        } catch (e: Throwable) {
+            // Catches both Exception and Error subclasses (e.g. LinkageError from R8 obfuscation)
+            // so that no failure path during reflection can crash the host app at startup.
+            Log.w(
+                "OpenTelemetryRum",
+                "SystemMetrics: span processor injection failed — metrics fall back to standalone spans. " +
+                    "Check the OTel SDK version or report this as a bug.",
+                e,
+            )
         }
     }
 }
