@@ -14,15 +14,8 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
 /**
- * Periodically captures a snapshot of all system + device metrics and delivers it via
- * one of two paths depending on whether a user span is currently in flight:
- *
- * **Path A — Event on active span (preferred):**
- * When [ActiveSpanRegistry] reports a live span, the metrics snapshot is attached as a
- * named event `"app.metrics"` directly on that span.
- *
- * **Path B — Standalone span (fallback):**
- * When no user span is active, a dedicated instant span named `"app.metrics"` is emitted.
+ * Periodically captures a snapshot of all system + device metrics and emits a standalone
+ * `"app.metrics"` span containing the data as a named event.
  *
  * **CPU min/max tracking:**
  * A 1-second sub-sampler feeds a rolling window for CPU usage. Each emission includes
@@ -36,7 +29,6 @@ internal class SystemMetricsSpanEmitter(
     private val openTelemetry: OpenTelemetry,
     private val scheduler: ScheduledExecutorService,
     private val intervalSeconds: Long,
-    private val activeSpanRegistry: ActiveSpanRegistry,
     private val cpuReader: CpuMetricsReader = CpuMetricsReader(),
     private val memoryReader: MemoryMetricsReader = MemoryMetricsReader(),
     private val threadReader: ThreadMetricsReader = ThreadMetricsReader(),
@@ -67,7 +59,7 @@ internal class SystemMetricsSpanEmitter(
         @Suppress("DiscouragedApi")
         scheduler.scheduleAtFixedRate(::sampleCpu, 1L, 1L, TimeUnit.SECONDS)
 
-        // Main emit timer: attach-or-standalone every intervalSeconds.
+        // Main emit timer: emit standalone span every intervalSeconds.
         @Suppress("DiscouragedApi")
         scheduler.scheduleAtFixedRate(::emitMetrics, intervalSeconds, intervalSeconds, TimeUnit.SECONDS)
 
@@ -103,13 +95,7 @@ internal class SystemMetricsSpanEmitter(
                 threadCount = threadReader.readThreadCount(),
             )
         resetCpuWindow()
-
-        val activeSpan = activeSpanRegistry.mostRecentActiveSpan()
-        if (activeSpan != null) {
-            activeSpan.addEvent("app.metrics", buildAttributes(sample))
-        } else {
-            emitStandaloneSpan(sample)
-        }
+        emitStandaloneSpan(sample)
     }
 
     private fun emitStandaloneSpan(sample: ProcessSample) {

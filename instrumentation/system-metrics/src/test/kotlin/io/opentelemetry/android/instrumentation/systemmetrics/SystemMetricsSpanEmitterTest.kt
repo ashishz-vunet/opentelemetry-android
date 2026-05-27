@@ -26,19 +26,16 @@ internal class StubDeviceMetricsReader : DeviceMetricsReader {
 
 class SystemMetricsSpanEmitterTest {
     private lateinit var spanExporter: InMemorySpanExporter
-    private lateinit var registry: ActiveSpanRegistry
     private lateinit var tracerProvider: SdkTracerProvider
     private lateinit var openTelemetry: OpenTelemetrySdk
 
     @BeforeEach
     fun setUp() {
         spanExporter = InMemorySpanExporter.create()
-        registry = ActiveSpanRegistry()
         tracerProvider =
             SdkTracerProvider
                 .builder()
                 .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
-                .addSpanProcessor(registry)
                 .build()
         openTelemetry =
             OpenTelemetrySdk.builder()
@@ -47,14 +44,13 @@ class SystemMetricsSpanEmitterTest {
     }
 
     @Test
-    fun `emits standalone app-metrics span when no user span is active`() {
+    fun `emits standalone app-metrics span`() {
         val scheduler = Executors.newSingleThreadScheduledExecutor()
         val emitter =
             SystemMetricsSpanEmitter(
                 openTelemetry = openTelemetry,
                 scheduler = scheduler,
                 intervalSeconds = 2L,
-                activeSpanRegistry = registry,
                 deviceReader = StubDeviceMetricsReader(),
             )
 
@@ -66,7 +62,6 @@ class SystemMetricsSpanEmitterTest {
         val spans = spanExporter.finishedSpanItems
         assertThat(spans).isNotEmpty
         val metricsSpan = spans.first { it.name == "app.metrics" }
-        // Metrics are in the event, not on the span attributes directly.
         assertThat(metricsSpan.events).anyMatch { it.name == "app.metrics" }
         val event = metricsSpan.events.first { it.name == "app.metrics" }
         assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_USAGE)).isNotNull
@@ -77,43 +72,6 @@ class SystemMetricsSpanEmitterTest {
     }
 
     @Test
-    fun `attaches app-metrics event to active user span instead of emitting standalone`() {
-        val scheduler = Executors.newSingleThreadScheduledExecutor()
-        val emitter =
-            SystemMetricsSpanEmitter(
-                openTelemetry = openTelemetry,
-                scheduler = scheduler,
-                intervalSeconds = 2L,
-                activeSpanRegistry = registry,
-                deviceReader = StubDeviceMetricsReader(),
-            )
-
-        // Start a user span BEFORE the emitter fires — registry picks it up via onStart().
-        val userSpan =
-            openTelemetry.tracerProvider
-                .get("test")
-                .spanBuilder("UserAction")
-                .startSpan()
-
-        emitter.start()
-        scheduler.awaitTermination(3_500, TimeUnit.MILLISECONDS)
-        scheduler.shutdownNow()
-
-        userSpan.end()
-
-        val finishedSpans = spanExporter.finishedSpanItems
-        val userSpanData = finishedSpans.first { it.name == "UserAction" }
-
-        // Metrics event must be on the user span, not emitted as a separate span.
-        assertThat(userSpanData.events).anyMatch { it.name == "app.metrics" }
-        assertThat(finishedSpans.none { it.name == "app.metrics" }).isTrue
-
-        val event = userSpanData.events.first { it.name == "app.metrics" }
-        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MIN)).isNotNull
-        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MAX)).isNotNull
-    }
-
-    @Test
     fun `standalone span carries all process and device metric attributes including min and max`() {
         val scheduler = Executors.newSingleThreadScheduledExecutor()
         val emitter =
@@ -121,7 +79,6 @@ class SystemMetricsSpanEmitterTest {
                 openTelemetry = openTelemetry,
                 scheduler = scheduler,
                 intervalSeconds = 2L,
-                activeSpanRegistry = registry,
                 deviceReader = StubDeviceMetricsReader(),
             )
 
