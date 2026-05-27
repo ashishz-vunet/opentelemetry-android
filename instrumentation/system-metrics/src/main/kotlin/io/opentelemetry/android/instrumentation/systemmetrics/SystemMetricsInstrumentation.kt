@@ -14,7 +14,6 @@ import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.trace.SpanProcessor
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Entry point for system metrics instrumentation.
@@ -27,30 +26,22 @@ import java.util.concurrent.atomic.AtomicReference
 internal class SystemMetricsInstrumentation : AndroidInstrumentation {
     override val name: String = "system-metrics"
 
-    // Single atomic reference encodes both "is installed" and "which executor to stop".
-    // This avoids a race where uninstall() reads a null executor before install() assigns it.
-    private val executorRef = AtomicReference<ScheduledExecutorService?>(null)
+    @Volatile private var scheduler: ScheduledExecutorService? = null
 
     override fun install(
         context: Context,
         openTelemetryRum: OpenTelemetryRum,
     ) {
-        val scheduler = Executors.newSingleThreadScheduledExecutor { r ->
+        if (scheduler != null) return
+        val newScheduler = Executors.newSingleThreadScheduledExecutor { r ->
             Thread(r, "otel-system-metrics").apply {
                 isDaemon = true
-                // Log and keep the executor alive if a scheduled task throws an unchecked exception.
-                // Without this, a RuntimeException from any reader call would silently cancel all
-                // future metric emissions for the remainder of the app's lifecycle.
                 setUncaughtExceptionHandler { _, e ->
                     Log.e("OpenTelemetryRum", "SystemMetrics: uncaught exception on scheduler thread", e)
                 }
             }
         }
-        if (!executorRef.compareAndSet(null, scheduler)) {
-            // Already installed — shut down the executor we just created and bail out.
-            scheduler.shutdownNow()
-            return
-        }
+        scheduler = newScheduler
 
         val registry = ActiveSpanRegistry()
         val sdk = openTelemetryRum.openTelemetry as? OpenTelemetrySdk
@@ -58,7 +49,7 @@ internal class SystemMetricsInstrumentation : AndroidInstrumentation {
 
         SystemMetricsSpanEmitter(
             openTelemetry = openTelemetryRum.openTelemetry,
-            scheduler = scheduler,
+            scheduler = newScheduler,
             intervalSeconds = COLLECTION_INTERVAL_SECONDS,
             activeSpanRegistry = registry,
             deviceReader = DefaultDeviceMetricsReader(context),
@@ -69,7 +60,8 @@ internal class SystemMetricsInstrumentation : AndroidInstrumentation {
         context: Context,
         openTelemetryRum: OpenTelemetryRum,
     ) {
-        executorRef.getAndSet(null)?.shutdownNow()
+        scheduler?.shutdownNow()
+        scheduler = null
     }
 
     private companion object {
