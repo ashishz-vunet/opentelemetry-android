@@ -3,9 +3,9 @@
 Status: development
 
 This instrumentation periodically captures a snapshot of CPU, memory, thread, and device
-metrics for the running process and device, and delivers them as a named event `"app.metrics"`
-attached to the currently active span. When no user span is in flight, a standalone
-`"app.metrics"` span is emitted instead.
+metrics for the running process and device, and always emits them as a named event `"app.metrics"`
+on a standalone `"app.metrics"` span. The collection interval defaults to 30 seconds and is
+configurable via the `android-agent` DSL.
 
 This instrumentation is **not** included in `android-agent` by default. It must be added
 explicitly as a dependency.
@@ -17,10 +17,10 @@ Data produced by this instrumentation uses instrumentation scope name
 
 ### Metrics snapshot
 
-* Type: Span event (on the active span) or standalone Span (when no span is active)
+* Type: Standalone Span with an `"app.metrics"` event
 * Name: `app.metrics`
 * Description: A point-in-time snapshot of process and device health metrics, emitted
-  every 30 seconds.
+  every 30 seconds by default (configurable).
 
 #### Attributes
 
@@ -48,10 +48,8 @@ Data produced by this instrumentation uses instrumentation scope name
 
 ## How it works
 
-On each collection tick the emitter checks `ActiveSpanRegistry` for the most recently
-started span that has not yet ended. If one exists, the metrics snapshot is added as an
-event on that span. If no span is active, a new instant span named `"app.metrics"` is
-created and immediately ended.
+On each collection tick the emitter creates an instant span named `"app.metrics"`, attaches
+the metrics snapshot as an event with the same name, and immediately ends the span.
 
 CPU min/max are tracked by a 1-second sub-sampler that runs between collection ticks,
 so each emission includes the full min/max window rather than a single instantaneous reading.
@@ -70,6 +68,32 @@ implementation("com.vunetsystems.opentelemetry.android.instrumentation:system-me
 
 Because the instrumentation is discovered at runtime via `ServiceLoader` (`@AutoService`),
 no manual wiring is required — adding the dependency is sufficient.
+
+### Configuring via `android-agent`
+
+When using `android-agent`, the collection interval can be changed through the Kotlin DSL:
+
+```kotlin
+OpenTelemetryRum.builder(application, config)
+    .addPlatform(AndroidSdkFetcher { androidAgent {
+        instrumentation {
+            systemMetrics {
+                collectionIntervalSeconds(60L)
+            }
+        }
+    }})
+    .build()
+```
+
+To disable the instrumentation entirely:
+
+```kotlin
+instrumentation {
+    systemMetrics {
+        enabled(false)
+    }
+}
+```
 
 ## Uninstalling
 
