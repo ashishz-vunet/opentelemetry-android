@@ -113,14 +113,13 @@ internal class SystemMetricsSpanEmitter(
     }
 
     private fun emitStandaloneSpan(sample: ProcessSample) {
-        // Attributes belong directly on the span — a standalone "app.metrics" span IS the
-        // snapshot, so there is no outer operation timeline to annotate with an event.
-        tracer
-            .spanBuilder("app.metrics")
-            .setSpanKind(SpanKind.INTERNAL)
-            .setAllAttributes(buildAttributes(sample))
-            .startSpan()
-            .end()
+        val span =
+            tracer
+                .spanBuilder("app.metrics")
+                .setSpanKind(SpanKind.INTERNAL)
+                .startSpan()
+        span.addEvent("app.metrics", buildAttributes(sample))
+        span.end()
     }
 
     private fun buildAttributes(sample: ProcessSample): Attributes =

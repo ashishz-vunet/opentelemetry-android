@@ -66,11 +66,14 @@ class SystemMetricsSpanEmitterTest {
         val spans = spanExporter.finishedSpanItems
         assertThat(spans).isNotEmpty
         val metricsSpan = spans.first { it.name == "app.metrics" }
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_USAGE)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MIN)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MAX)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_USED)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_THREAD_COUNT)).isNotNull
+        // Metrics are in the event, not on the span attributes directly.
+        assertThat(metricsSpan.events).anyMatch { it.name == "app.metrics" }
+        val event = metricsSpan.events.first { it.name == "app.metrics" }
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_USAGE)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MIN)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MAX)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_USED)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_THREAD_COUNT)).isNotNull
     }
 
     @Test
@@ -127,17 +130,19 @@ class SystemMetricsSpanEmitterTest {
         scheduler.shutdownNow()
 
         val metricsSpan = spanExporter.finishedSpanItems.first { it.name == "app.metrics" }
+        assertThat(metricsSpan.events).anyMatch { it.name == "app.metrics" }
+        val event = metricsSpan.events.first { it.name == "app.metrics" }
 
         // Process attrs — current values
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_USAGE)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_USED)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_ALLOCATED)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_FREE)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_NATIVE_USED)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_THREAD_COUNT)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_USAGE)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_USED)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_ALLOCATED)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_HEAP_FREE)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_NATIVE_USED)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_THREAD_COUNT)).isNotNull
 
         // CPU min/max window attrs
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MIN)).isNotNull
-        assertThat(metricsSpan.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MAX)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MIN)).isNotNull
+        assertThat(event.attributes.get(SystemMetricsSpanEmitter.ATTR_CPU_MAX)).isNotNull
     }
 }
