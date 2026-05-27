@@ -10,6 +10,7 @@ import android.util.Log
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
+import io.opentelemetry.android.instrumentation.ConfigurableSystemMetricsInstrumentation
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 
@@ -22,10 +23,11 @@ private const val COLLECTION_INTERVAL_SECONDS = 30L
  * emits them as an `"app.metrics"` event on a standalone `"app.metrics"` span.
  */
 @AutoService(AndroidInstrumentation::class)
-class SystemMetricsInstrumentation : AndroidInstrumentation {
+class SystemMetricsInstrumentation : AndroidInstrumentation, ConfigurableSystemMetricsInstrumentation {
     override val name: String = "system-metrics"
 
     @Volatile private var scheduler: ScheduledExecutorService? = null
+    @Volatile private var collectionIntervalSeconds: Long = COLLECTION_INTERVAL_SECONDS
 
     override fun install(
         context: Context,
@@ -45,7 +47,7 @@ class SystemMetricsInstrumentation : AndroidInstrumentation {
         SystemMetricsSpanEmitter(
             openTelemetry = openTelemetryRum.openTelemetry,
             scheduler = newScheduler,
-            intervalSeconds = COLLECTION_INTERVAL_SECONDS,
+            intervalSeconds = collectionIntervalSeconds,
             deviceReader = DefaultDeviceMetricsReader(context),
         ).start()
     }
@@ -56,5 +58,9 @@ class SystemMetricsInstrumentation : AndroidInstrumentation {
     ) {
         scheduler?.shutdownNow()
         scheduler = null
+    }
+
+    override fun setCollectionIntervalSeconds(value: Long) {
+        collectionIntervalSeconds = value
     }
 }
