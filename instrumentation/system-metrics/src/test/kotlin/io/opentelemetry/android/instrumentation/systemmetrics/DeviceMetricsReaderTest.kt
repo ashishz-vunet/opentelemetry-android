@@ -14,44 +14,45 @@ import org.robolectric.RuntimeEnvironment
 @RunWith(AndroidJUnit4::class)
 class DeviceMetricsReaderTest {
     private val context = RuntimeEnvironment.getApplication()
-    private val reader = DeviceMetricsReader(context)
+    private val reader = DefaultDeviceMetricsReader(context)
 
     @Test
-    fun `readTotalRamBytes returns non-negative value`() {
+    fun `readDeviceMemoryInfo total RAM is non-negative`() {
         // Robolectric stubs ActivityManager.getMemoryInfo() with totalMem=0;
         // on a real device this will be positive.
-        assertThat(reader.readTotalRamBytes()).isGreaterThanOrEqualTo(0L)
+        assertThat(reader.readDeviceMemoryInfo().totalBytes).isGreaterThanOrEqualTo(0L)
     }
 
     @Test
-    fun `readAvailableRamBytes returns non-negative value`() {
-        assertThat(reader.readAvailableRamBytes()).isGreaterThanOrEqualTo(0L)
+    fun `readDeviceMemoryInfo available RAM is non-negative`() {
+        assertThat(reader.readDeviceMemoryInfo().availableBytes).isGreaterThanOrEqualTo(0L)
     }
 
     @Test
-    fun `readAvailableRamBytes is less than or equal to total`() {
-        assertThat(reader.readAvailableRamBytes()).isLessThanOrEqualTo(reader.readTotalRamBytes())
+    fun `available RAM is less than or equal to total`() {
+        val info = reader.readDeviceMemoryInfo()
+        assertThat(info.availableBytes).isLessThanOrEqualTo(info.totalBytes)
     }
 
     @Test
-    fun `readLowMemoryFlag returns 0 or 1`() {
-        val flag = reader.readLowMemoryFlag()
-        assertThat(flag).isIn(0L, 1L)
+    fun `readDeviceMemoryInfo lowMemoryFlag is 0 or 1`() {
+        assertThat(reader.readDeviceMemoryInfo().lowMemoryFlag).isIn(0L, 1L)
     }
 
     @Test
-    fun `readDiskFreeBytes returns non-negative value`() {
-        assertThat(reader.readDiskFreeBytes()).isGreaterThanOrEqualTo(0L)
+    fun `readDiskInfo free bytes is non-negative`() {
+        assertThat(reader.readDiskInfo().freeBytes).isGreaterThanOrEqualTo(0L)
     }
 
     @Test
-    fun `readDiskTotalBytes returns non-negative value`() {
+    fun `readDiskInfo total bytes is non-negative`() {
         // Robolectric stubs StatFs with blockCount=0; on a real device this will be positive.
-        assertThat(reader.readDiskTotalBytes()).isGreaterThanOrEqualTo(0L)
+        assertThat(reader.readDiskInfo().totalBytes).isGreaterThanOrEqualTo(0L)
     }
 
     @Test
-    fun `readDiskFreeBytes is less than or equal to total`() {
-        assertThat(reader.readDiskFreeBytes()).isLessThanOrEqualTo(reader.readDiskTotalBytes())
+    fun `free disk space is less than or equal to total`() {
+        val info = reader.readDiskInfo()
+        assertThat(info.freeBytes).isLessThanOrEqualTo(info.totalBytes)
     }
 }

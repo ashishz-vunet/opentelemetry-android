@@ -10,7 +10,7 @@ import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
-class SystemMetricsReadersTest {
+class MemoryMetricsReaderTest {
     @Test
     fun `readHeapUsedBytes returns positive value`() {
         val reader = MemoryMetricsReader()
@@ -24,60 +24,33 @@ class SystemMetricsReadersTest {
     }
 
     @Test
-    fun `readCpuUsagePercent first call returns zero or non-negative value`() {
-        val reader = CpuMetricsReader()
-        // First call: no prior sample delta, should return ~0.0 (no CPU was used yet)
-        // Uses Process.getElapsedCpuTime() which is thread-safe and always available
-        assertThat(reader.readCpuUsagePercent()).isGreaterThanOrEqualTo(0.0).isLessThanOrEqualTo(100.0)
+    fun `readHeapUsedBytes is less than or equal to readHeapAllocatedBytes`() {
+        val reader = MemoryMetricsReader()
+        assertThat(reader.readHeapUsedBytes()).isLessThanOrEqualTo(reader.readHeapAllocatedBytes())
     }
 
     @Test
-    fun `readCpuUsagePercent second call returns percentage between 0-100`() {
-        val reader = CpuMetricsReader()
-        reader.readCpuUsagePercent() // seed the baseline
-
-        // Do some work so CPU time advances
-        var sum = 0L
-        for (i in 0 until 100_000) {
-            sum += i
-        }
-
-        val usage = reader.readCpuUsagePercent()
-        assertThat(usage).isGreaterThanOrEqualTo(0.0).isLessThanOrEqualTo(100.0)
+    fun `readHeapFreeBytes is non-negative`() {
+        val reader = MemoryMetricsReader()
+        assertThat(reader.readHeapFreeBytes()).isGreaterThanOrEqualTo(0L)
     }
 
     @Test
-    fun `readThreadCount returns positive value`() {
-        val reader = ThreadMetricsReader()
-        assertThat(reader.readThreadCount()).isGreaterThan(0L)
-    }
-
-    @Test
-    fun `readThreadCountByState includes RUNNABLE state`() {
-        val reader = ThreadMetricsReader()
-        val states = reader.readThreadCountByState()
-        assertThat(states).containsKey("RUNNABLE")
-        assertThat(states["RUNNABLE"]).isGreaterThan(0L)
-    }
-
-    @Test
-    fun `gauges are registered and produce metrics`() {
+    fun `heap reader integrates with OTel gauge callback`() {
         val metricReader = InMemoryMetricReader.create()
         val meterProvider =
             SdkMeterProvider
                 .builder()
                 .registerMetricReader(metricReader)
                 .build()
-
-        // Register gauges using the SDK meter directly
         val meter = meterProvider.get("io.opentelemetry.android.system-metrics")
-        val memoryReader = MemoryMetricsReader()
+        val reader = MemoryMetricsReader()
 
         meter
             .gaugeBuilder("test.heap.used")
             .setUnit("By")
             .ofLongs()
-            .buildWithCallback { m -> m.record(memoryReader.readHeapUsedBytes()) }
+            .buildWithCallback { m -> m.record(reader.readHeapUsedBytes()) }
 
         metricReader.forceFlush()
         val metrics = metricReader.collectAllMetrics()

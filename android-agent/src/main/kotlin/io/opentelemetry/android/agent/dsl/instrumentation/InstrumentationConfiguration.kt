@@ -38,6 +38,9 @@ class InstrumentationConfiguration internal constructor(
     private val hybridClick: HybridClickConfiguration by lazy {
         HybridClickConfiguration(config, instrumentationLoader)
     }
+    private val systemMetrics: SystemMetricsConfiguration by lazy {
+        SystemMetricsConfiguration(config, instrumentationLoader)
+    }
 
     /**
      * Configures activity lifecycle instrumentation.
@@ -93,5 +96,12 @@ class InstrumentationConfiguration internal constructor(
      */
     fun hybridClick(configure: HybridClickConfiguration.() -> Unit) {
         hybridClick.configure()
+    }
+
+    /**
+     * Configures system metrics instrumentation.
+     */
+    fun systemMetrics(configure: SystemMetricsConfiguration.() -> Unit) {
+        systemMetrics.configure()
     }
 }
