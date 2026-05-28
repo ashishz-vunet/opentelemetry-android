@@ -27,7 +27,7 @@ internal class AppStartupTimer(
     timestampProvider: StartupTimestampProvider? = null,
 ) {
     private lateinit var startupClock: AnchoredClock
-    private var firstPossibleTimestamp: Long = 0
+    private var spanStartNanos: Long = 0
 
     private val startupTimestamps: StartupTimestampProvider? by lazy {
         timestampProvider ?: ServiceLoader.load(
@@ -57,15 +57,15 @@ internal class AppStartupTimer(
             return it
         }
         startupClock = AnchoredClock(clock)
-        firstPossibleTimestamp = startupClock.now()
+        val sdkInitNanos = startupClock.now()
 
         // On API 24+, compute the process fork time once and reuse it for both the span
         // start timestamp and the app.process.creation event, so they carry the same value.
-        // On API 23, fall back to firstPossibleTimestamp (SDK init time).
+        // On API 23, fall back to SDK init time.
         val processStartMs =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) processStartEpochMs() else -1L
-        val spanStartNanos =
-            if (processStartMs > 0L) processStartMs * 1_000_000L else firstPossibleTimestamp
+        spanStartNanos =
+            if (processStartMs > 0L) processStartMs * 1_000_000L else sdkInitNanos
 
         val appStart =
             tracer
@@ -146,7 +146,7 @@ internal class AppStartupTimer(
             return
         }
         uiInitStarted = true
-        if (firstPossibleTimestamp + MAX_TIME_TO_UI_INIT < startupClock.now()) {
+        if (spanStartNanos + MAX_TIME_TO_UI_INIT < startupClock.now()) {
             Log.d(RumConstants.OTEL_RUM_LOG_TAG, "Max time to UI init exceeded")
             uiInitTooLate = true
             clear()
