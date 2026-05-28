@@ -16,8 +16,10 @@ import android.net.Uri
  *
  * Android initializes ContentProviders in descending [android:initOrder] order, before
  * [android.app.Application.onCreate] is called. By using [Int.MAX_VALUE] as the init order,
- * this provider is guaranteed to run first — before any third-party library provider — giving
- * the earliest possible post-attachBaseContext timestamp.
+ * this provider runs as early as possible in the ContentProvider initialization sequence,
+ * giving the earliest practical post-attachBaseContext timestamp. Note that ordering among
+ * providers with equal initOrder values is not defined, so another provider declaring
+ * [Int.MAX_VALUE] may run concurrently or first.
  *
  * The captured value is stored in [ProcessStartTimestamps.attachBaseContextEpochMs] and later
  * emitted as the `app.base_context` event on the AppStart span by AppStartupTimer.

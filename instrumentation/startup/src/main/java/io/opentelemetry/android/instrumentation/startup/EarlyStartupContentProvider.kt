@@ -15,9 +15,10 @@ import android.net.Uri
  * finished initializing, just before [android.app.Application.onCreate] is called.
  *
  * Android initializes ContentProviders in descending [android:initOrder] order. By using
- * [Int.MIN_VALUE] (-2147483648) as the init order, this provider is guaranteed to run last —
- * after every other ContentProvider (including third-party libraries) — giving the latest
- * possible pre-onCreate timestamp.
+ * [Int.MIN_VALUE] (-2147483648) as the init order, this provider runs as late as possible
+ * in the ContentProvider initialization sequence, giving the latest practical pre-onCreate
+ * timestamp. Note that ordering among providers with equal initOrder values is not defined,
+ * so another provider declaring [Int.MIN_VALUE] may run concurrently or after this one.
  *
  * The captured value is stored in [ProcessStartTimestamps.contentProviderEpochMs] and later
  * emitted as the `app.init.contentprovider` event on the AppStart span by AppStartupTimer.
