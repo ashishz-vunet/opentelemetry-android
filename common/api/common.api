@@ -1,9 +1,3 @@
-public final class io/opentelemetry/android/common/ProcessStartTimestamps {
-	public static final field INSTANCE Lio/opentelemetry/android/common/ProcessStartTimestamps;
-	public static field attachBaseContextEpochMs J
-	public static field contentProviderEpochMs J
-}
-
 public final class io/opentelemetry/android/common/RumConstants {
 	public static final field ACTIVITY_LIFECYCLE_EVENT_KEY Lio/opentelemetry/api/common/AttributeKey;
 	public static final field ACTIVITY_LIFECYCLE_SPAN_NAME Ljava/lang/String;
@@ -32,6 +26,11 @@ public final class io/opentelemetry/android/common/RumConstants$Events {
 	public static final field INIT_EVENT_SPAN_EXPORTER Ljava/lang/String;
 	public static final field INIT_EVENT_STARTED Ljava/lang/String;
 	public static final field INSTANCE Lio/opentelemetry/android/common/RumConstants$Events;
+}
+
+public abstract interface class io/opentelemetry/android/common/StartupTimestampProvider {
+	public abstract fun getAttachBaseContextEpochMs ()J
+	public abstract fun getContentProviderEpochMs ()J
 }
 
 public final class io/opentelemetry/android/common/internal/features/networkattributes/CurrentNetworkAttributesExtractor {

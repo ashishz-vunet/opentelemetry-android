@@ -9,7 +9,6 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
-import io.opentelemetry.android.common.ProcessStartTimestamps
 
 /**
  * A no-op [ContentProvider] that records the wall-clock time after all ContentProviders have

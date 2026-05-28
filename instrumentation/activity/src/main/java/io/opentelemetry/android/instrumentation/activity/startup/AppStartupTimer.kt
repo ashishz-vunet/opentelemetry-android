@@ -13,7 +13,8 @@ import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.RequiresApi
-import io.opentelemetry.android.common.ProcessStartTimestamps
+import io.opentelemetry.android.common.StartupTimestampProvider
+import java.util.ServiceLoader
 import io.opentelemetry.android.common.RumConstants
 import io.opentelemetry.android.internal.services.visiblescreen.activities.DefaultingActivityLifecycleCallbacks
 import io.opentelemetry.api.common.Attributes
@@ -22,9 +23,18 @@ import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.sdk.common.Clock
 import java.util.concurrent.TimeUnit
 
-internal class AppStartupTimer {
+internal class AppStartupTimer(
+    timestampProvider: StartupTimestampProvider? = null,
+) {
     private lateinit var startupClock: AnchoredClock
     private var firstPossibleTimestamp: Long = 0
+
+    private val startupTimestamps: StartupTimestampProvider? by lazy {
+        timestampProvider ?: ServiceLoader.load(
+            StartupTimestampProvider::class.java,
+            StartupTimestampProvider::class.java.classLoader,
+        ).firstOrNull()
+    }
 
     @Volatile
     var startupSpan: Span? = null
@@ -76,7 +86,7 @@ internal class AppStartupTimer {
 
         // app.base_context — captured by AppAnchorContentProvider in the startup artifact.
         // Value is 0 when the startup artifact is not on the classpath.
-        val baseContextMs = ProcessStartTimestamps.attachBaseContextEpochMs
+        val baseContextMs = startupTimestamps?.attachBaseContextEpochMs ?: 0L
         if (baseContextMs > 0L) {
             appStart.addEvent(
                 EVENT_BASE_CONTEXT,
@@ -89,7 +99,7 @@ internal class AppStartupTimer {
         // app.init.contentprovider — captured by EarlyStartupContentProvider in the startup artifact.
         // Marks the end of ContentProvider init, just before Application.onCreate().
         // Value is 0 when the startup artifact is not on the classpath.
-        val contentProviderMs = ProcessStartTimestamps.contentProviderEpochMs
+        val contentProviderMs = startupTimestamps?.contentProviderEpochMs ?: 0L
         if (contentProviderMs > 0L) {
             appStart.addEvent(
                 EVENT_CONTENT_PROVIDER_INIT,
