@@ -61,11 +61,12 @@ internal class AppStartupTimer(
 
         // On API 24+, compute the process fork time once and reuse it for both the span
         // start timestamp and the app.process.creation event, so they carry the same value.
+        // Anchored to the injected clock so start and end timestamps share the same time domain.
         // On API 23, fall back to SDK init time.
-        val processStartMs =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) processStartEpochMs() else -1L
+        val processStartNanos =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) processStartNanos(sdkInitNanos) else -1L
         spanStartNanos =
-            if (processStartMs > 0L) processStartMs * 1_000_000L else sdkInitNanos
+            if (processStartNanos > 0L) processStartNanos else sdkInitNanos
 
         val appStart =
             tracer
@@ -75,12 +76,12 @@ internal class AppStartupTimer(
                 .startSpan()
         this.startupSpan = appStart
 
-        if (processStartMs > 0L) {
+        if (processStartNanos > 0L) {
             appStart.addEvent(
                 EVENT_PROCESS_CREATION,
                 Attributes.empty(),
-                processStartMs,
-                TimeUnit.MILLISECONDS,
+                processStartNanos,
+                TimeUnit.NANOSECONDS,
             )
         }
 
@@ -113,16 +114,19 @@ internal class AppStartupTimer(
     }
 
     /**
-     * Converts [Process.getStartElapsedRealtime] to a wall-clock epoch value:
-     *   processStartEpochMs = nowMs − (elapsedRealtime − processStartElapsedRealtime)
+     * Computes the process fork timestamp in the injected clock's time domain by subtracting
+     * the elapsed realtime delta from [clockNowNanos]:
+     *   processStartNanos = clockNowNanos − (elapsedRealtime − processStartElapsedRealtime) × 1_000_000
      *
-     * Assumes the wall clock was not adjusted between process fork and now, which is safe
-     * for the typical sub-second cold-start window.
+     * Using [clockNowNanos] (from the injected [Clock]) as the reference — rather than
+     * [System.currentTimeMillis] — keeps the span start and span end in the same time domain,
+     * which is required for correct duration calculation with custom clocks.
      */
     @RequiresApi(Build.VERSION_CODES.N)
-    private fun processStartEpochMs(): Long {
-        val nowMs = System.currentTimeMillis()
-        return nowMs - (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime())
+    private fun processStartNanos(clockNowNanos: Long): Long {
+        val elapsedSinceStartNanos =
+            (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()) * 1_000_000L
+        return clockNowNanos - elapsedSinceStartNanos
     }
 
     /**
