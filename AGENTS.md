@@ -96,6 +96,11 @@ Any change to the public API surface is detected by `apiCheck` and requires extr
   code that is unrelated to the current task. This includes comments — do not reword, add, or remove
   comments that are not directly related to the PR's goal. If a line is not functionally
   affected by the proposed change, leave it exactly as-is.
+- **Keep Gradle/plugin/runtime parity for instrumentation changes.** Whenever adding or changing
+  instrumentation modules, names, or configuration knobs in `android-agent` / `instrumentation/*`,
+  update any dependent Gradle plugin and runtime wiring in the same change (DSL blocks, resolved
+  config/codegen, dependency wiring, initializer mapping, and tests). Do not ship instrumentation
+  features that are unreachable from consumer configuration surfaces.
 - Preserve the surrounding code's style and idioms.
 - Do not add redundant comments that just narrate what the code does.
 
