@@ -23,10 +23,10 @@ val localGprUser = localProperties.getProperty("gpr.user")
 val localGprKey = localProperties.getProperty("gpr.key")
 
 // If this module is not marked as stable (the default state) then append "-alpha" to its version.
-// ---
+// Disabled on this fork by default (otel.publish.alpha=false) so all modules share one dev version for BOM alignment.
 // To mark a module as stable, it needs to define the following property: "otel.stable=true" preferably within a "gradle.properties" file
 // located in the same directory as the target module's "build.gradle.kts" file.
-if (findProperty("otel.stable") != "true") {
+if (findProperty("otel.publish.alpha") == "true" && findProperty("otel.stable") != "true") {
     version = "$version-alpha"
 }
 // If this release isn't "final" (the default state) then append "-SNAPSHOT" to this module's version.

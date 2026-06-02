@@ -6,9 +6,76 @@ This documents describes the manual steps required to publish a release to maven
 
 For this fork, do not publish to Maven Central.
 
-- Publish fork artifacts to GitHub Packages via `.github/workflows/publish-github-packages.yml`.
-- Use `-PpublishTarget=github` for artifact publication from this repository.
+- Publish fork artifacts to GitHub Packages (`vunetsystems/opentelemetry-android`).
+- Use `-PpublishTarget=github` for all publication from this repository (default in `build.gradle.kts`).
 - Sonatype release flow in `.github/workflows/release.yml` is reserved for upstream and is blocked for forks.
+
+## Publishing to GitHub Packages (VuNet dev line)
+
+### Prerequisites
+
+- `gradle.properties`: `version`, `otel.version.suffix=dev`, `otel.publish.alpha=false`
+- GitHub credentials with `packages:write` for `vunetsystems/opentelemetry-android`
+- Set in `local.properties` or environment:
+  - `gpr.user` / `GITHUB_ACTOR`
+  - `gpr.key` / `GITHUB_TOKEN`
+
+### Local verification before publish
+
+```bash
+./gradlew spotlessApply
+./gradlew check
+./gradlew apiCheck
+
+# Optional: inspect local POM versions
+./gradlew publishToMavenLocal -PpublishTarget=github
+```
+
+Confirm modules report the same version, e.g. `0.0.1-SNAPSHOT-dev`:
+
+```bash
+./gradlew :android-agent:properties :instrumentation:crash:properties -q | grep '^version:'
+```
+
+### Publish all modules
+
+```bash
+./gradlew publish -PpublishTarget=github
+```
+
+CI may also run `.github/workflows/publish-github-packages.yml` when a PR merges to `develop`.
+
+### Troubleshooting publish failures
+
+| HTTP status | Meaning | Action |
+|-------------|---------|--------|
+| **401** | Bad or missing token | Regenerate a PAT with `write:packages` / `read:packages`; set `gpr.user` and `gpr.key` in `local.properties` |
+| **403** | Token lacks permission or repo access | Ensure the user can publish to `vunetsystems/opentelemetry-android` |
+| **402 Payment Required** | GitHub Packages storage/billing limit for the org | Org admin: [GitHub billing](https://github.com/settings/billing) → increase Packages quota or free storage; delete old package versions under **Packages** |
+
+If publish fails partway through, fix the org issue and re-run `./gradlew publish -PpublishTarget=github` (Gradle may skip unchanged artifacts).
+
+### Consumer BOM (vuTelemetry and apps)
+
+```kotlin
+dependencies {
+    api(platform("com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT-dev"))
+    implementation("com.vunetsystems.opentelemetry.android:android-agent")
+    // other artifacts without version — BOM aligns versions
+}
+```
+
+After each publish, record the BOM version and update vuTelemetry-android `vunet.stack.version` / OTel BOM pin to match.
+
+### Pinned QA build (optional)
+
+Non-SNAPSHOT artifacts for a fixed test stack:
+
+```bash
+./gradlew publish -PpublishTarget=github -Pfinal=true
+```
+
+Produces `0.0.1-dev` (no `-SNAPSHOT`) for all modules.
 
 ## Release cadence
 

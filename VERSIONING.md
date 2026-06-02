@@ -3,6 +3,47 @@
 This document address a variety of versioning and release considerations for
 the OpenTelemetry Android project.
 
+## VuNet fork — dev versioning
+
+This fork (`com.vunetsystems.opentelemetry.android`) uses a single published version for
+**every** module so consumers can align dependencies with one BOM coordinate.
+
+### Published coordinates
+
+| Role | Maven coordinate (current dev line) |
+|------|-------------------------------------|
+| BOM | `com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT-dev` |
+| Agent entry | `com.vunetsystems.opentelemetry.android:android-agent:0.0.1-SNAPSHOT-dev` |
+| Instrumentation | `com.vunetsystems.opentelemetry.android.instrumentation:<artifact>:0.0.1-SNAPSHOT-dev` |
+
+Repository: `https://maven.pkg.github.com/vunetsystems/opentelemetry-android`
+
+The [vuTelemetry-android](https://github.com/vunetsystems/vutelemetry-android) SDK and Gradle plugin
+should pin the same BOM version when building against this fork.
+
+### How the version string is built
+
+Configured in root `gradle.properties`:
+
+| Property | Value (dev line) | Effect |
+|----------|------------------|--------|
+| `version` | `0.0.1` | Base semver |
+| `otel.version.suffix` | `dev` | Appends `-dev` after other suffixes |
+| `otel.publish.alpha` | `false` | Does **not** append `-alpha` (all modules share one version) |
+| `final` (Gradle property) | unset | Appends `-SNAPSHOT` |
+
+Default publish result: **`0.0.1-SNAPSHOT-dev`**.
+
+Pinned (non-SNAPSHOT) dev build: publish with `-Pfinal=true` → **`0.0.1-dev`** for all modules.
+
+To re-enable upstream-style `-alpha` on non-stable modules: `-Potel.publish.alpha=true`.
+
+### Bumping the dev line
+
+1. Update `version` in `gradle.properties` (e.g. `0.0.2`).
+2. Publish to GitHub Packages (see [RELEASING.md](RELEASING.md)).
+3. Update the matching BOM version in vuTelemetry-android.
+
 ## Versioning scheme
 
 This codebase uses [Semantic Versioning](https://semver.org/) (semver) for its version numbers.
