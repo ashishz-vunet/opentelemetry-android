@@ -16,9 +16,14 @@ This instrumentation produces the following telemetry:
 * Type: Span
 * Name: `app.start`
 * Description: This span is created and started when the Activity instrumentation is
-  installed. It is ended when the initial activity reaches PostPaused, PostStopped, or PostDestroyed.
+  installed. It is ended when the first frame is drawn (TTID) or when the initial activity
+  reaches PostPaused, PostStopped, or PostDestroyed.
 * Attributes:
   * `start.type`: { `cold` | `hot` | `warm` }
+* Span events (cold start): `app.process.creation`, `app.attach_base_context.start`,
+  `app.attach_base_context.end` (require [startup-agent](../startup/README.md) and a declared
+  `attachBaseContext` override on your `Application` subclass), `app.content_providers.start`,
+  `app.content_providers.end`, `applicationCreated`, `applicationPostCreated`, `ttid`
 
 ### Activity state change
 

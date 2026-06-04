@@ -29,8 +29,10 @@ public final class io/opentelemetry/android/common/RumConstants$Events {
 }
 
 public abstract interface class io/opentelemetry/android/common/StartupTimestampProvider {
-	public abstract fun getAttachBaseContextEpochMs ()J
+	public abstract fun getAttachBaseContextEndElapsedRealtime ()J
+	public abstract fun getAttachBaseContextStartElapsedRealtime ()J
 	public abstract fun getContentProviderEpochMs ()J
+	public abstract fun getContentProvidersPhaseStartEpochMs ()J
 }
 
 public abstract interface class io/opentelemetry/android/common/UncaughtExceptionHandlerWithDeferredDelegation : java/lang/Thread$UncaughtExceptionHandler {

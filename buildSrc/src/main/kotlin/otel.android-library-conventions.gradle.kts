@@ -1,4 +1,5 @@
 import io.gitlab.arturbosch.detekt.Detekt
+import kotlinx.validation.ApiValidationExtension
 import kotlinx.validation.KotlinApiBuildTask
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -100,42 +101,48 @@ project.tasks.withType(Detekt::class.java).configureEach {
     }
 }
 
-// disable kotlin's binary compat validator for unwanted modules
-val ignoredModules = listOf("test-common")
-apiValidation.validationDisabled = ignoredModules.contains(project.name)
+plugins.withId("org.jetbrains.kotlinx.binary-compatibility-validator") {
+    // disable kotlin's binary compat validator for unwanted modules
+    val ignoredModules = listOf("test-common")
+    configure<ApiValidationExtension> {
+        validationDisabled = ignoredModules.contains(project.name)
+    }
+
+    val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
+
+    // Workaround for https://youtrack.jetbrains.com/issue/KT-83410 and
+    // https://issuetracker.google.com/issues/470109449.
+    //
+    // 1. AGP 9 uses KotlinBaseApiPlugin (not KotlinBasePluginWrapper) which does not populate
+    //    KotlinJvmAndroidCompilation.output.classesDirs. BCV therefore creates the apiBuild task
+    //    (triggered by our kotlin-android stub plugin) but leaves its inputClassesDirs empty,
+    //    causing the task to fail. Wire the release compilation output directory manually so BCV
+    //    has the class files it needs.
+    //
+    // 2. BCV's withKotlinPluginVersion adds kotlin-metadata-jvm to the worker classpath only for
+    //    kotlin-jvm and kotlin-multiplatform plugins, not for kotlin-android. Without it the
+    //    AbiBuildWorker fails with NoClassDefFoundError on JvmMetadataUtil. Resolve it explicitly
+    //    using the same KGP version that is on the compile classpath.
+    //
+    // This should be removed once the upstream KGP/AGP bug is fixed.
+    val kotlinMetadataForBcv: Configuration = configurations.create("kotlinMetadataForBcv") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+    }
+    dependencies.add(
+        kotlinMetadataForBcv.name,
+        "org.jetbrains.kotlin:kotlin-metadata-jvm:${libs.findVersion("kotlin").get().requiredVersion}"
+    )
+
+    tasks.withType(KotlinApiBuildTask::class.java).configureEach {
+        val compileTask = tasks.named("compileReleaseKotlin", KotlinCompile::class.java)
+        inputClassesDirs.from(compileTask.flatMap { it.destinationDirectory })
+        runtimeClasspath.from(kotlinMetadataForBcv)
+        dependsOn(compileTask)
+    }
+}
 
 val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
-
-// Workaround for https://youtrack.jetbrains.com/issue/KT-83410 and
-// https://issuetracker.google.com/issues/470109449.
-//
-// 1. AGP 9 uses KotlinBaseApiPlugin (not KotlinBasePluginWrapper) which does not populate
-//    KotlinJvmAndroidCompilation.output.classesDirs. BCV therefore creates the apiBuild task
-//    (triggered by our kotlin-android stub plugin) but leaves its inputClassesDirs empty,
-//    causing the task to fail. Wire the release compilation output directory manually so BCV
-//    has the class files it needs.
-//
-// 2. BCV's withKotlinPluginVersion adds kotlin-metadata-jvm to the worker classpath only for
-//    kotlin-jvm and kotlin-multiplatform plugins, not for kotlin-android. Without it the
-//    AbiBuildWorker fails with NoClassDefFoundError on JvmMetadataUtil. Resolve it explicitly
-//    using the same KGP version that is on the compile classpath.
-//
-// This should be removed once the upstream KGP/AGP bug is fixed.
-val kotlinMetadataForBcv: Configuration = configurations.create("kotlinMetadataForBcv") {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-}
-dependencies.add(
-    kotlinMetadataForBcv.name,
-    "org.jetbrains.kotlin:kotlin-metadata-jvm:${libs.findVersion("kotlin").get().requiredVersion}"
-)
-
-tasks.withType(KotlinApiBuildTask::class.java).configureEach {
-    val compileTask = tasks.named("compileReleaseKotlin", KotlinCompile::class.java)
-    inputClassesDirs.from(compileTask.flatMap { it.destinationDirectory })
-    runtimeClasspath.from(kotlinMetadataForBcv)
-    dependsOn(compileTask)
-}
 
 dependencies {
     implementation(libs.findLibrary("androidx-annotation").get())

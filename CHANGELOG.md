@@ -4,6 +4,19 @@
 
 ### ⚠️⚠️ Breaking changes
 
+- Published Maven artifact for startup runtime instrumentation renamed from `startup` to
+  `startup-library` (module layout now mirrors `okhttp3-library` / `okhttp3-agent`). Direct
+  consumers must update coordinates; `startup-agent` is unchanged.
+
+- Removed misleading `app.base_context` span event (it did not measure `attachBaseContext`).
+  Added `app.attach_base_context.start` / `app.attach_base_context.end` events (requires
+  `startup-agent` + Byte Buddy) and `app.content_providers.start` / `app.content_providers.end`
+  events for the ContentProvider phase. Removed legacy `app.init.contentprovider` and
+  `applicationPreCreated` AppStart span events (use `app.content_providers.end` instead).
+  `StartupTimestampProvider.attachBaseContextEpochMs` renamed
+  to `contentProvidersPhaseStartEpochMs`; added `attachBaseContextStartElapsedRealtime` and
+  `attachBaseContextEndElapsedRealtime`.
+
 - Activity and fragment lifecycle spans now use stable span names with an event attribute:
   - Activity lifecycle: span name `activity.lifecycle`, attribute `activity.lifecycle.event` (`Created`, `Resumed`, `Paused`, `Stopped`, `Destroyed`, `Restarted`)
   - Fragment lifecycle: span name `fragment.lifecycle`, attribute `fragment.lifecycle.event` (`Created`, `Restored`, `Resumed`, `Paused`, `Stopped`, `Destroyed`, `ViewDestroyed`, `Detached`)
