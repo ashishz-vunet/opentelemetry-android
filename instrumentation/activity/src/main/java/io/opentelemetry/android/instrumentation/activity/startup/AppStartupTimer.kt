@@ -62,6 +62,9 @@ internal class AppStartupTimer(
     // true once the first-frame draw has been detected and the ttid event emitted
     private val ttidFired = AtomicBoolean(false)
 
+    // guards ContentProvider end events so they are recorded once when the timestamp becomes available
+    private var contentProviderEndEventsRecorded = false
+
     fun start(
         tracer: Tracer,
         clock: Clock,
@@ -99,38 +102,21 @@ internal class AppStartupTimer(
             )
         }
 
-        // app.base_context — captured by AppAnchorContentProvider in the startup artifact.
-        // Value is 0 when the startup artifact is not on the classpath.
-        val baseContextMs = startupTimestamps?.attachBaseContextEpochMs ?: 0L
-        if (baseContextMs > 0L) {
+        recordAttachBaseContextEvents(appStart, sdkInitNanos)
+
+        // Start of ContentProvider init phase — captured by AppAnchorContentProvider.
+        val contentProvidersStartMs = startupTimestamps?.contentProvidersPhaseStartEpochMs ?: 0L
+        if (contentProvidersStartMs > 0L) {
             appStart.addEvent(
-                EVENT_BASE_CONTEXT,
+                EVENT_CONTENT_PROVIDERS_START,
                 Attributes.empty(),
-                baseContextMs,
+                contentProvidersStartMs,
                 TimeUnit.MILLISECONDS,
             )
         }
 
-        // app.init.contentprovider — captured by EarlyStartupContentProvider in the startup artifact.
-        // Marks the end of ContentProvider init, just before Application.onCreate().
-        // Value is 0 when the startup artifact is not on the classpath.
-        val contentProviderMs = startupTimestamps?.contentProviderEpochMs ?: 0L
-        if (contentProviderMs > 0L) {
-            appStart.addEvent(
-                EVENT_CONTENT_PROVIDER_INIT,
-                Attributes.empty(),
-                contentProviderMs,
-                TimeUnit.MILLISECONDS,
-            )
-            // applicationPreCreated is a semantic alias for the same timestamp — it marks
-            // the boundary where the OS hands control to Application.onCreate().
-            appStart.addEvent(
-                EVENT_APPLICATION_PRE_CREATED,
-                Attributes.empty(),
-                contentProviderMs,
-                TimeUnit.MILLISECONDS,
-            )
-        }
+        // ContentProvider phase end — may be deferred if SDK init runs before EarlyStartupContentProvider.
+        recordContentProviderEndEvents(appStart)
 
         // applicationCreated — SDK init is complete; all of Application.onCreate() that
         // ran before the OTel SDK initialised has now been accounted for.
@@ -158,6 +144,68 @@ internal class AppStartupTimer(
         val elapsedSinceStartNanos =
             (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()) * 1_000_000L
         return clockNowNanos - elapsedSinceStartNanos
+    }
+
+    /**
+     * Converts an [android.os.SystemClock.elapsedRealtime] sample into the injected [Clock]
+     * time domain, using [clockNowNanos] as the reference instant (same approach as
+     * [processStartNanos]).
+     */
+    private fun elapsedRealtimeToClockNanos(
+        elapsedRealtimeMs: Long,
+        clockNowNanos: Long,
+    ): Long {
+        val elapsedSinceMarkerNanos =
+            (SystemClock.elapsedRealtime() - elapsedRealtimeMs) * 1_000_000L
+        return clockNowNanos - elapsedSinceMarkerNanos
+    }
+
+    private fun recordAttachBaseContextEvents(
+        appStart: Span,
+        clockNowNanos: Long,
+    ) {
+        val startElapsed = startupTimestamps?.attachBaseContextStartElapsedRealtime ?: 0L
+        val endElapsed = startupTimestamps?.attachBaseContextEndElapsedRealtime ?: 0L
+        if (startElapsed <= 0L || endElapsed < startElapsed) {
+            return
+        }
+        val startNanos = elapsedRealtimeToClockNanos(startElapsed, clockNowNanos)
+        val endNanos = elapsedRealtimeToClockNanos(endElapsed, clockNowNanos)
+        appStart.addEvent(
+            EVENT_ATTACH_BASE_CONTEXT_START,
+            Attributes.empty(),
+            startNanos,
+            TimeUnit.NANOSECONDS,
+        )
+        appStart.addEvent(
+            EVENT_ATTACH_BASE_CONTEXT_END,
+            Attributes.empty(),
+            endNanos,
+            TimeUnit.NANOSECONDS,
+        )
+    }
+
+    /**
+     * Records ContentProvider phase end milestones when [StartupTimestampProvider.contentProviderEpochMs]
+     * is available. Safe to call multiple times; no-ops after the first successful record or while the
+     * timestamp is still zero (e.g. SDK initialized via a mid-order ContentProvider before
+     * [io.opentelemetry.android.instrumentation.startup.EarlyStartupContentProvider] runs).
+     */
+    private fun recordContentProviderEndEvents(appStart: Span) {
+        if (contentProviderEndEventsRecorded) {
+            return
+        }
+        val contentProviderMs = startupTimestamps?.contentProviderEpochMs ?: 0L
+        if (contentProviderMs <= 0L) {
+            return
+        }
+        appStart.addEvent(
+            EVENT_CONTENT_PROVIDERS_END,
+            Attributes.empty(),
+            contentProviderMs,
+            TimeUnit.MILLISECONDS,
+        )
+        contentProviderEndEventsRecorded = true
     }
 
     /**
@@ -234,6 +282,7 @@ internal class AppStartupTimer(
             return
         }
         uiInitStarted = true
+        startupSpan?.let { recordContentProviderEndEvents(it) }
         if (spanStartNanos + MAX_TIME_TO_UI_INIT < startupClock.now()) {
             Log.d(RumConstants.OTEL_RUM_LOG_TAG, "Max time to UI init exceeded")
             uiInitTooLate = true
@@ -256,6 +305,7 @@ internal class AppStartupTimer(
     private fun endSpan() {
         val overallAppStartSpan = this.startupSpan
         if (overallAppStartSpan != null && !uiInitTooLate) {
+            recordContentProviderEndEvents(overallAppStartSpan)
             overallAppStartSpan.end(startupClock.now(), TimeUnit.NANOSECONDS)
         }
         clear()
@@ -263,6 +313,7 @@ internal class AppStartupTimer(
 
     private fun clear() {
         this.startupSpan = null
+        contentProviderEndEventsRecorded = false
     }
 
     companion object {
@@ -275,25 +326,29 @@ internal class AppStartupTimer(
         internal const val EVENT_PROCESS_CREATION = "app.process.creation"
 
         /**
-         * Milestone: [android.app.Application.attachBaseContext] completed; captured by
-         * [io.opentelemetry.android.instrumentation.startup.AppAnchorContentProvider].
-         * Present only when the startup artifact is on the classpath.
+         * Milestone: start of [android.app.Application.attachBaseContext]. Requires startup-agent
+         * weave and a declared override on the app's [android.app.Application] subclass.
          */
-        internal const val EVENT_BASE_CONTEXT = "app.base_context"
+        internal const val EVENT_ATTACH_BASE_CONTEXT_START = "app.attach_base_context.start"
 
         /**
-         * Milestone: all ContentProviders finished initializing; captured by
+         * Milestone: end of [android.app.Application.attachBaseContext]. Requires startup-agent
+         * weave and a declared override on the app's [android.app.Application] subclass.
+         */
+        internal const val EVENT_ATTACH_BASE_CONTEXT_END = "app.attach_base_context.end"
+
+        /**
+         * Milestone: start of the ContentProvider initialization phase; captured by
+         * [io.opentelemetry.android.instrumentation.startup.AppAnchorContentProvider].
+         */
+        internal const val EVENT_CONTENT_PROVIDERS_START = "app.content_providers.start"
+
+        /**
+         * Milestone: end of the ContentProvider initialization phase; captured by
          * [io.opentelemetry.android.instrumentation.startup.EarlyStartupContentProvider].
          * Present only when the startup artifact is on the classpath.
          */
-        internal const val EVENT_CONTENT_PROVIDER_INIT = "app.init.contentprovider"
-
-        /**
-         * Semantic alias for [EVENT_CONTENT_PROVIDER_INIT] — marks the OS hand-off point
-         * where [android.app.Application.onCreate] is about to run.
-         * Present only when the startup artifact is on the classpath.
-         */
-        internal const val EVENT_APPLICATION_PRE_CREATED = "applicationPreCreated"
+        internal const val EVENT_CONTENT_PROVIDERS_END = "app.content_providers.end"
 
         /**
          * Milestone: OTel SDK initialisation complete; all of [android.app.Application.onCreate]
