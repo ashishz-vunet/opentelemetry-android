@@ -1,0 +1,13 @@
+public final class io/opentelemetry/android/instrumentation/glide/GlideInstrumentation : io/opentelemetry/android/instrumentation/AndroidInstrumentation {
+	public fun <init> ()V
+	public fun getName ()Ljava/lang/String;
+	public fun install (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
+	public fun uninstall (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
+}
+
+public final class io/opentelemetry/android/instrumentation/glide/GlideOtelRequestListener : com/bumptech/glide/request/RequestListener {
+	public fun <init> ()V
+	public fun onLoadFailed (Lcom/bumptech/glide/load/engine/GlideException;Ljava/lang/Object;Lcom/bumptech/glide/request/target/Target;Z)Z
+	public fun onResourceReady (Ljava/lang/Object;Ljava/lang/Object;Lcom/bumptech/glide/request/target/Target;Lcom/bumptech/glide/load/DataSource;Z)Z
+}
+

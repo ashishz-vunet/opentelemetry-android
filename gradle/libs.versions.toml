@@ -52,6 +52,7 @@ opentelemetry-api-incubator = { module = "io.opentelemetry:opentelemetry-api-inc
 opentelemetry-sdk-extension-incubator = { module = "io.opentelemetry:opentelemetry-sdk-extension-incubator" }
 opentelemetry-sdk = { module = "io.opentelemetry:opentelemetry-sdk" }
 opentelemetry-context = { module = "io.opentelemetry:opentelemetry-context" }
+opentelemetry-extension-kotlin = { module = "io.opentelemetry:opentelemetry-extension-kotlin" }
 opentelemetry-exporter-logging = { module = "io.opentelemetry:opentelemetry-exporter-logging" }
 opentelemetry-diskBuffering = { module = "io.opentelemetry.contrib:opentelemetry-disk-buffering", version.ref = "opentelemetry-contrib" }
 opentelemetry-processors = { module = "io.opentelemetry.contrib:opentelemetry-processors", version.ref = "opentelemetry-contrib" }

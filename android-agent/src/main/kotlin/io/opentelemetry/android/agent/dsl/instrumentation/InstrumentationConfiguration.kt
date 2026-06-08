@@ -41,6 +41,12 @@ class InstrumentationConfiguration internal constructor(
     private val systemMetrics: SystemMetricsConfiguration by lazy {
         SystemMetricsConfiguration(config, instrumentationLoader)
     }
+    private val glide: GlideConfiguration by lazy {
+        GlideConfiguration(config, instrumentationLoader)
+    }
+    private val coil: CoilConfiguration by lazy {
+        CoilConfiguration(config, instrumentationLoader)
+    }
 
     /**
      * Configures activity lifecycle instrumentation.
@@ -103,5 +109,19 @@ class InstrumentationConfiguration internal constructor(
      */
     fun systemMetrics(configure: SystemMetricsConfiguration.() -> Unit) {
         systemMetrics.configure()
+    }
+
+    /**
+     * Configures Glide image-loading instrumentation.
+     */
+    fun glide(configure: GlideConfiguration.() -> Unit) {
+        glide.configure()
+    }
+
+    /**
+     * Configures Coil image-loading instrumentation.
+     */
+    fun coil(configure: CoilConfiguration.() -> Unit) {
+        coil.configure()
     }
 }
