@@ -30,30 +30,41 @@ Data produced by this instrumentation uses instrumentation scope name
     * `image.url` — sanitised image URL (query parameters stripped)
     * `image.model_type` — fully-qualified class name of the Coil data model (e.g. `java.lang.String`)
     * `image.source` — where Coil resolved the image from:
-        * `"memory"` — served from Coil's memory cache or in-memory bitmap pool
+        * `"network"` — fetched from the network (OkHttp child spans will appear under this span)
         * `"disk"` — served from Coil's disk cache
-        * `"network"` — fetched from the network
+        * `"memory"` — served from Coil's memory cache or in-memory bitmap pool
     * `image.load.status` — `"success"` or `"error"`
 
 On failure, the span status is set to `ERROR` and the throwable is recorded on the span
 via `span.recordException`.
 
+### OkHttp child spans
+
+When an image is fetched over the network, the OkHttp instrumentation automatically creates
+child `GET` spans under the `image.load` span. This works because `CoilOtelInterceptor` wraps
+the downstream chain execution in `withContext(span.asContextElement())`, propagating the
+`image.load` span into the coroutine context before OkHttp executes. Both the interceptor
+and the event listener factory must be registered (see Installation below).
+
 ## Installation
 
-### Adding dependencies
+### 1. Add the dependency
 
 ```kotlin
-implementation("io.opentelemetry.android.instrumentation:coil:1.3.0-alpha")
+implementation("com.vunetsystems.opentelemetry.android.instrumentation:coil:0.0.1-SNAPSHOT-dev")
 ```
 
-### One-time setup in Application.onCreate or your DI graph
+### 2. One-time setup in Application.onCreate or your DI graph
 
-Register `CoilImageLoaderEventListenerFactory` with Coil's `ImageLoader` builder so that the
-instrumentation receives lifecycle callbacks for every request:
+Register both `CoilImageLoaderEventListenerFactory` (span lifecycle) and `CoilOtelInterceptor`
+(OkHttp context propagation) with Coil's `ImageLoader` builder:
 
 ```kotlin
 val imageLoader = ImageLoader.Builder(context)
     .eventListenerFactory(CoilImageLoaderEventListenerFactory())
+    .components {
+        add(CoilOtelInterceptor())
+    }
     .build()
 
 // Make this the singleton loader used by Coil's top-level extension functions:
@@ -64,10 +75,37 @@ This is a one-time setup. After this, all Coil requests are traced automatically
 further code changes required.
 
 > [!NOTE]
-> If you construct `ImageLoader` instances manually rather than using the singleton, register
-> the factory on each builder individually.
+> Both `CoilImageLoaderEventListenerFactory` **and** `CoilOtelInterceptor` must be registered.
+> The factory manages the span lifecycle; the interceptor propagates the span context into
+> the coroutine so OkHttp child spans are correctly parented.
 
 > [!NOTE]
-> The factory returns `EventListener.NONE` (zero overhead) when
+> If you construct `ImageLoader` instances manually rather than using the singleton, register
+> both on each builder individually.
+
+> [!NOTE]
+> `CoilImageLoaderEventListenerFactory` returns `EventListener.NONE` (zero overhead) when
 > `CoilInstrumentation` has not yet been installed by the OpenTelemetry RUM SDK, so it is
 > safe to register it unconditionally during application startup.
+
+## How it works
+
+| Phase | Class | Action |
+|---|---|---|
+| Request enqueued (any thread) | `CoilOtelEventListener.onStart` | Starts span, calls `makeCurrent()`, stores in `CoilSpanStore` |
+| Fetch runs (coroutine dispatcher) | `CoilOtelInterceptor` | Restores span via `withContext(span.asContextElement())` → OkHttp spans parent to image.load |
+| Request finished | `CoilOtelEventListener.onSuccess` / `onError` | Closes scope, adds attributes, ends span |
+
+## Disabling via the agent DSL
+
+If you need to turn off Coil instrumentation without removing the dependency:
+
+```kotlin
+OpenTelemetryRumInitializer.initialize(application) {
+    instrumentations {
+        coil {
+            enabled(false)
+        }
+    }
+}
+```
