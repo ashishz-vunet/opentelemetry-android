@@ -42,10 +42,10 @@ class InstrumentationConfiguration internal constructor(
         SystemMetricsConfiguration(config, instrumentationLoader)
     }
     private val glide: GlideConfiguration by lazy {
-        GlideConfiguration(config, instrumentationLoader)
+        GlideConfiguration(config)
     }
     private val coil: CoilConfiguration by lazy {
-        CoilConfiguration(config, instrumentationLoader)
+        CoilConfiguration(config)
     }
 
     /**

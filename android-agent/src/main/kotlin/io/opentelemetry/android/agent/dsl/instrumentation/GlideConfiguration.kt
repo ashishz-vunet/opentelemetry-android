@@ -7,7 +7,6 @@ package io.opentelemetry.android.agent.dsl.instrumentation
 
 import io.opentelemetry.android.agent.dsl.OpenTelemetryDslMarker
 import io.opentelemetry.android.config.OtelRumConfig
-import io.opentelemetry.android.instrumentation.AndroidInstrumentationLoader
 
 /**
  * Type-safe config DSL that controls whether Glide image-loading instrumentation is enabled.
@@ -19,7 +18,6 @@ import io.opentelemetry.android.instrumentation.AndroidInstrumentationLoader
 @OpenTelemetryDslMarker
 class GlideConfiguration internal constructor(
     private val config: OtelRumConfig,
-    instrumentationLoader: AndroidInstrumentationLoader,
 ) : CanBeEnabledAndDisabled {
 
     override fun enabled(enabled: Boolean) {

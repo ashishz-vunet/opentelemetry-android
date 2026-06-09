@@ -10,7 +10,6 @@ import coil.decode.DataSource
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import io.mockk.every
 import io.mockk.mockk
 import io.opentelemetry.api.trace.StatusCode
 import io.opentelemetry.context.Scope

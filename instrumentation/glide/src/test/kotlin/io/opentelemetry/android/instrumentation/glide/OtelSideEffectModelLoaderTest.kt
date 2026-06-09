@@ -13,7 +13,6 @@ import com.bumptech.glide.load.model.ModelLoader
 import com.bumptech.glide.load.model.MultiModelLoaderFactory
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.context.Context as OtelContext
@@ -152,8 +151,7 @@ class OtelSideEffectModelLoaderTest {
         val loader = makeLoader()
         val model = "https://cdn.bank.com/logo.png"
 
-        val loadData = loader.buildLoadData(model, 100, 100, Options())!!
-        val wrappedFetcher = loadData.fetcher
+        loader.buildLoadData(model, 100, 100, Options())!!
 
         var spanSeenDuringFetch: Span? = null
         val callback = object : DataFetcher.DataCallback<InputStream> {

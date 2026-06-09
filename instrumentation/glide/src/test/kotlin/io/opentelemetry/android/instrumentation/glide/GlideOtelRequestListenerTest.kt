@@ -8,7 +8,6 @@ package io.opentelemetry.android.instrumentation.glide
 
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.GlideException
-import com.bumptech.glide.request.target.Target
 import io.mockk.mockk
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.StatusCode
@@ -44,10 +43,7 @@ class GlideOtelRequestListenerTest {
     }
 
     /** Simulates what OtelSideEffectModelLoader does before the request fires. */
-    private fun primeStore(
-        model: Any,
-        dataSource: DataSource = DataSource.REMOTE,
-    ): Span {
+    private fun primeStore(model: Any): Span {
         val tracer =
             otelTesting.openTelemetry
                 .tracerProvider

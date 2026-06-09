@@ -1,8 +1,22 @@
+public final class com/bumptech/glide/annotation/ksp/GlideIndexer_GlideModule_io_opentelemetry_android_instrumentation_glide_GlideOtelModule {
+	public fun <init> ()V
+}
+
 public final class io/opentelemetry/android/instrumentation/glide/GlideInstrumentation : io/opentelemetry/android/instrumentation/AndroidInstrumentation {
+	public static final field Companion Lio/opentelemetry/android/instrumentation/glide/GlideInstrumentation$Companion;
 	public fun <init> ()V
 	public fun getName ()Ljava/lang/String;
 	public fun install (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
 	public fun uninstall (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
+}
+
+public final class io/opentelemetry/android/instrumentation/glide/GlideInstrumentation$Companion {
+	public final fun registerGlideComponents (Lcom/bumptech/glide/Registry;)V
+}
+
+public final class io/opentelemetry/android/instrumentation/glide/GlideOtelModule : com/bumptech/glide/module/LibraryGlideModule {
+	public fun <init> ()V
+	public fun registerComponents (Landroid/content/Context;Lcom/bumptech/glide/Glide;Lcom/bumptech/glide/Registry;)V
 }
 
 public final class io/opentelemetry/android/instrumentation/glide/GlideOtelRequestListener : com/bumptech/glide/request/RequestListener {

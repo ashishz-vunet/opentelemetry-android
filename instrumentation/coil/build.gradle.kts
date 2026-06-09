@@ -24,10 +24,10 @@ dependencies {
 
     // Coil is compileOnly: the module must compile against the Coil API surface but must
     // never force Coil onto consumers that do not already depend on it themselves.
-    compileOnly("io.coil-kt:coil:2.6.0")
+    compileOnly(libs.coil)
 
     testImplementation(project(":test-common"))
-    testImplementation("io.coil-kt:coil:2.6.0")
+    testImplementation(libs.coil)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
 }

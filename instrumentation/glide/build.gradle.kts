@@ -24,11 +24,11 @@ dependencies {
 
     // Glide is compileOnly: the module must compile against the Glide API surface but must
     // never force Glide onto consumers that do not already depend on it themselves.
-    compileOnly("com.github.bumptech.glide:glide:4.16.0")
-    ksp("com.github.bumptech.glide:ksp:4.16.0")
+    compileOnly(libs.glide)
+    ksp(libs.glide.ksp)
 
     testImplementation(project(":test-common"))
-    testImplementation("com.github.bumptech.glide:glide:4.16.0")
+    testImplementation(libs.glide)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
 }
