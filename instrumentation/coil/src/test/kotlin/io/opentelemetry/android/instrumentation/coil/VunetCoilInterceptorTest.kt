@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 
 /**
- * Unit tests for [CoilOtelInterceptor].
+ * Unit tests for [VunetCoilInterceptor].
  *
  * Validates:
  * - When a span exists in [CoilSpanStore], the interceptor propagates the OTel context into
@@ -32,7 +32,7 @@ import org.junit.jupiter.api.extension.RegisterExtension
  * - When no span exists, the interceptor is a transparent pass-through.
  * - The interceptor never throws, regardless of store state.
  */
-class CoilOtelInterceptorTest {
+class VunetCoilInterceptorTest {
     companion object {
         @JvmField
         @RegisterExtension
@@ -40,19 +40,17 @@ class CoilOtelInterceptorTest {
     }
 
     private val androidContext: Context = mockk(relaxed = true)
-    private lateinit var interceptor: CoilOtelInterceptor
+    private lateinit var interceptor: VunetCoilInterceptor
 
     @BeforeEach
     fun setUp() {
         CoilSpanStore.spans.clear()
-        CoilSpanStore.scopes.clear()
-        interceptor = CoilOtelInterceptor()
+        interceptor = VunetCoilInterceptor()
     }
 
     @AfterEach
     fun tearDown() {
         CoilSpanStore.spans.clear()
-        CoilSpanStore.scopes.clear()
     }
 
     @Test

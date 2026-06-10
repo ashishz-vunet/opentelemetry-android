@@ -31,7 +31,6 @@ class GlideInstrumentationTest {
     fun setUp() {
         GlideInstrumentation.tracer = null
         GlideSpanStore.spans.clear()
-        GlideSpanStore.startNanos.clear()
         instrumentation = GlideInstrumentation()
         context = mockk(relaxed = true)
         openTelemetryRum = mockk()
@@ -42,7 +41,6 @@ class GlideInstrumentationTest {
     fun tearDown() {
         GlideInstrumentation.tracer = null
         GlideSpanStore.spans.clear()
-        GlideSpanStore.startNanos.clear()
     }
 
     @Test
@@ -75,14 +73,12 @@ class GlideInstrumentationTest {
         val span = tracer.spanBuilder("orphan").startSpan()
 
         GlideSpanStore.spans[42] = span
-        GlideSpanStore.startNanos[42] = System.nanoTime()
 
         instrumentation.install(context, openTelemetryRum)
         instrumentation.uninstall(context, openTelemetryRum)
 
         assertThat(span.isRecording).isFalse()
         assertThat(GlideSpanStore.spans).isEmpty()
-        assertThat(GlideSpanStore.startNanos).isEmpty()
     }
 
     @Test

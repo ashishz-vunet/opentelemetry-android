@@ -16,7 +16,7 @@ import coil.request.ImageRequest
  * ## Consumer registration (one-time setup in Application.onCreate or DI graph)
  * ```kotlin
  * val imageLoader = ImageLoader.Builder(context)
- *     .eventListenerFactory(CoilImageLoaderEventListenerFactory())
+ *     .eventListenerFactory(VunetCoilEventListenerFactory())
  *     .build()
  *
  * // Register as the singleton loader used by the top-level extension functions:
@@ -27,7 +27,7 @@ import coil.request.ImageRequest
  * [create] returns [EventListener.NONE] so that zero telemetry overhead is incurred for
  * un-instrumented builds.
  */
-class CoilImageLoaderEventListenerFactory : EventListener.Factory {
+class VunetCoilEventListenerFactory : EventListener.Factory {
     override fun create(request: ImageRequest): EventListener {
         val currentTracer = CoilInstrumentation.tracer ?: return EventListener.NONE
         return CoilOtelEventListener(currentTracer)

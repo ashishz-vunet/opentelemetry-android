@@ -18,11 +18,11 @@ import java.util.concurrent.TimeUnit
  * [OtelSideEffectModelLoader].
  *
  * ## Responsibility split
- * | Phase            | Class                        | Action                              |
- * |------------------|------------------------------|-------------------------------------|
- * | Request started  | [OtelSideEffectModelLoader]  | Start span, capture context, store  |
- * | Fetch runs       | [OtelContextDataFetcher]     | Restore context, OkHttp spans child |
- * | Request finished | [GlideOtelRequestListener]   | Add attrs, end span                 |
+ * | Phase            | Class                        | Action                                        |
+ * |------------------|------------------------------|-----------------------------------------------|
+ * | buildLoadData    | [OtelSideEffectModelLoader]  | Start span (parent = StartupSpanProvider), store |
+ * | Fetch runs       | [OtelContextDataFetcher]     | Restore context, OkHttp spans child           |
+ * | Request finished | [VunetGlideRequestListener]   | Add attrs, end span                           |
  *
  * ## Scope lifecycle
  * Glide scopes are opened and closed on Glide's background executor thread inside
@@ -37,11 +37,11 @@ import java.util.concurrent.TimeUnit
  * ## Consumer registration (in AppGlideModule)
  * ```kotlin
  * override fun applyOptions(context: Context, builder: GlideBuilder) {
- *     builder.addGlobalRequestListener(GlideOtelRequestListener())
+ *     builder.addGlobalRequestListener(VunetGlideRequestListener())
  * }
  * ```
  */
-class GlideOtelRequestListener : RequestListener<Any> {
+class VunetGlideRequestListener : RequestListener<Any> {
 
     override fun onResourceReady(
         resource: Any,
@@ -58,7 +58,6 @@ class GlideOtelRequestListener : RequestListener<Any> {
         val key = System.identityHashCode(model)
         return try {
             val span: Span? = GlideSpanStore.spans.remove(key)
-            GlideSpanStore.startNanos.remove(key)
             if (span != null) {
                 // Normal path: span was started by OtelContextModelLoader (disk / network)
                 // with setStartTimestamp, so its duration already reflects real fetch time.
@@ -101,7 +100,6 @@ class GlideOtelRequestListener : RequestListener<Any> {
         val key = model?.let { System.identityHashCode(it) } ?: return false
         return try {
             val span: Span? = GlideSpanStore.spans.remove(key)
-            GlideSpanStore.startNanos.remove(key)
             // If no pre-created span exists (e.g. failure on a memory-cache path),
             // create one on-the-fly so the failure is never silently dropped.
             // Use receivedAtEpochNanos as start so the span has a real (sub-millisecond) duration.

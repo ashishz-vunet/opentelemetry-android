@@ -12,7 +12,6 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import io.mockk.mockk
 import io.opentelemetry.api.trace.StatusCode
-import io.opentelemetry.context.Scope
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
 import io.opentelemetry.sdk.trace.data.SpanData
 import org.assertj.core.api.Assertions.assertThat
@@ -30,9 +29,9 @@ import org.junit.jupiter.api.extension.RegisterExtension
  * - [ATTR_IMAGE_MODEL_TYPE] is captured correctly.
  * - On success: [ATTR_IMAGE_SOURCE] is mapped correctly for each [DataSource], status is OK.
  * - On error: exception is recorded, status is ERROR.
- * - Scope is always closed before span attributes are set (invariant via [CoilSpanStore] state).
+ * - On cancel: span is ended with CANCELLED status and removed from the store.
  * - [CoilSpanStore] is empty after terminal callbacks.
- * - [CoilOtelEventListener.Factory] returns [coil.EventListener.NONE] when tracer is null.
+ * - [VunetCoilEventListenerFactory] returns [coil.EventListener.NONE] when tracer is null.
  */
 class CoilOtelEventListenerTest {
     companion object {
@@ -49,7 +48,6 @@ class CoilOtelEventListenerTest {
     fun setUp() {
         CoilInstrumentation.tracer = null
         CoilSpanStore.spans.clear()
-        CoilSpanStore.scopes.clear()
         tracer = otelTesting.openTelemetry.tracerProvider.tracerBuilder("test").build()
         listener = CoilOtelEventListener(tracer)
     }
@@ -58,7 +56,6 @@ class CoilOtelEventListenerTest {
     fun tearDown() {
         CoilInstrumentation.tracer = null
         CoilSpanStore.spans.clear()
-        CoilSpanStore.scopes.clear()
     }
 
     // ---------------------------------------------------------------------------
@@ -107,14 +104,13 @@ class CoilOtelEventListenerTest {
     }
 
     @Test
-    fun `onStart stores both span and scope in CoilSpanStore`() {
+    fun `onStart stores span in CoilSpanStore`() {
         val request = buildRequest("https://example.com/img.png")
 
         listener.onStart(request)
 
         val key = System.identityHashCode(request)
         assertThat(CoilSpanStore.spans).containsKey(key)
-        assertThat(CoilSpanStore.scopes).containsKey(key)
     }
 
     // ---------------------------------------------------------------------------
@@ -130,7 +126,6 @@ class CoilOtelEventListenerTest {
         listener.onSuccess(request, successResult)
 
         assertThat(CoilSpanStore.spans).doesNotContainKey(System.identityHashCode(request))
-        assertThat(CoilSpanStore.scopes).doesNotContainKey(System.identityHashCode(request))
         val spans = otelTesting.spans
         assertThat(spans).hasSize(1)
         assertThat(spans[0].status.statusCode).isEqualTo(StatusCode.OK)
@@ -183,27 +178,6 @@ class CoilOtelEventListenerTest {
             .isEqualTo(STATUS_SUCCESS)
     }
 
-    @Test
-    fun `onSuccess closes scope before ending span`() {
-        val request = buildRequest("https://example.com/img.png")
-        listener.onStart(request)
-
-        val key = System.identityHashCode(request)
-        var spanEndedWhenScopeClosed = false
-        val realSpan = CoilSpanStore.spans[key]!!
-        val wrappedScope = Scope {
-            // When scope.close() fires, the span should not yet have been ended.
-            // A span that is still recording has not been ended.
-            spanEndedWhenScopeClosed = !realSpan.isRecording
-        }
-        CoilSpanStore.scopes[key] = wrappedScope
-
-        listener.onSuccess(request, buildSuccessResult(request, DataSource.NETWORK))
-
-        // scope.close() was invoked while the span was still recording (not yet ended)
-        assertThat(spanEndedWhenScopeClosed).isFalse()
-    }
-
     // ---------------------------------------------------------------------------
     // onError
     // ---------------------------------------------------------------------------
@@ -216,7 +190,6 @@ class CoilOtelEventListenerTest {
         listener.onError(request, buildErrorResult(request, throwable))
 
         assertThat(CoilSpanStore.spans).doesNotContainKey(System.identityHashCode(request))
-        assertThat(CoilSpanStore.scopes).doesNotContainKey(System.identityHashCode(request))
         val span: SpanData = otelTesting.spans[0]
         assertThat(span.status.statusCode).isEqualTo(StatusCode.ERROR)
     }
@@ -244,23 +217,53 @@ class CoilOtelEventListenerTest {
         assertThat(exceptionEvent).isNotNull()
     }
 
+    // ---------------------------------------------------------------------------
+    // onCancel
+    // ---------------------------------------------------------------------------
+
     @Test
-    fun `onError closes scope before ending span`() {
+    fun `onCancel ends span with CANCELLED status and clears store`() {
         val request = buildRequest("https://example.com/img.png")
         listener.onStart(request)
 
-        val key = System.identityHashCode(request)
-        var spanEndedWhenScopeClosed = false
-        val realSpan = CoilSpanStore.spans[key]!!
-        val wrappedScope = Scope {
-            // scope.close() must fire while the span is still recording
-            spanEndedWhenScopeClosed = !realSpan.isRecording
-        }
-        CoilSpanStore.scopes[key] = wrappedScope
+        listener.onCancel(request)
 
-        listener.onError(request, buildErrorResult(request, RuntimeException("err")))
+        // Span and any store entry must be removed — no orphaned in-flight spans.
+        assertThat(CoilSpanStore.spans).doesNotContainKey(System.identityHashCode(request))
+        val span: SpanData = otelTesting.spans[0]
+        assertThat(span.attributes.get(ATTR_IMAGE_LOAD_STATUS)).isEqualTo(STATUS_CANCELLED)
+    }
 
-        assertThat(spanEndedWhenScopeClosed).isFalse()
+    @Test
+    fun `onCancel leaves span status UNSET (cancellation is not an error)`() {
+        val request = buildRequest("https://example.com/img.png")
+        listener.onStart(request)
+
+        listener.onCancel(request)
+
+        // A cancelled load is not a failure: the span status must not be ERROR.
+        val span: SpanData = otelTesting.spans[0]
+        assertThat(span.status.statusCode).isEqualTo(StatusCode.UNSET)
+    }
+
+    @Test
+    fun `onCancel ends the in-flight span (no orphaned recording span)`() {
+        val request = buildRequest("https://example.com/img.png")
+        listener.onStart(request)
+        val span = CoilSpanStore.spans[System.identityHashCode(request)]
+
+        listener.onCancel(request)
+
+        assertThat(span?.isRecording).isFalse()
+    }
+
+    @Test
+    fun `onCancel without prior onStart is a no-op and does not throw`() {
+        val request = buildRequest("https://example.com/img.png")
+        // Never call onStart — store is empty
+        listener.onCancel(request)
+
+        assertThat(otelTesting.spans).isEmpty()
     }
 
     // ---------------------------------------------------------------------------
@@ -380,7 +383,7 @@ class CoilOtelEventListenerTest {
     @Test
     fun `Factory returns NONE when tracer is null`() {
         CoilInstrumentation.tracer = null
-        val factory = CoilImageLoaderEventListenerFactory()
+        val factory = VunetCoilEventListenerFactory()
         val request = buildRequest("https://example.com/img.png")
 
         val result = factory.create(request)
@@ -391,7 +394,7 @@ class CoilOtelEventListenerTest {
     @Test
     fun `Factory returns CoilOtelEventListener when tracer is set`() {
         CoilInstrumentation.tracer = tracer
-        val factory = CoilImageLoaderEventListenerFactory()
+        val factory = VunetCoilEventListenerFactory()
         val request = buildRequest("https://example.com/img.png")
 
         val result = factory.create(request)

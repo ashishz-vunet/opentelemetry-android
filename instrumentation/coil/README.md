@@ -41,7 +41,7 @@ via `span.recordException`.
 ### OkHttp child spans
 
 When an image is fetched over the network, the OkHttp instrumentation automatically creates
-child `GET` spans under the `image.load` span. This works because `CoilOtelInterceptor` wraps
+child `GET` spans under the `image.load` span. This works because `VunetCoilInterceptor` wraps
 the downstream chain execution in `withContext(span.asContextElement())`, propagating the
 `image.load` span into the coroutine context before OkHttp executes. Both the interceptor
 and the event listener factory must be registered (see Installation below).
@@ -56,14 +56,14 @@ implementation("com.vunetsystems.opentelemetry.android.instrumentation:coil:0.0.
 
 ### 2. One-time setup in Application.onCreate or your DI graph
 
-Register both `CoilImageLoaderEventListenerFactory` (span lifecycle) and `CoilOtelInterceptor`
+Register both `VunetCoilEventListenerFactory` (span lifecycle) and `VunetCoilInterceptor`
 (OkHttp context propagation) with Coil's `ImageLoader` builder:
 
 ```kotlin
 val imageLoader = ImageLoader.Builder(context)
-    .eventListenerFactory(CoilImageLoaderEventListenerFactory())
+    .eventListenerFactory(VunetCoilEventListenerFactory())
     .components {
-        add(CoilOtelInterceptor())
+        add(VunetCoilInterceptor())
     }
     .build()
 
@@ -75,7 +75,7 @@ This is a one-time setup. After this, all Coil requests are traced automatically
 further code changes required.
 
 > [!NOTE]
-> Both `CoilImageLoaderEventListenerFactory` **and** `CoilOtelInterceptor` must be registered.
+> Both `VunetCoilEventListenerFactory` **and** `VunetCoilInterceptor` must be registered.
 > The factory manages the span lifecycle; the interceptor propagates the span context into
 > the coroutine so OkHttp child spans are correctly parented.
 
@@ -84,7 +84,7 @@ further code changes required.
 > both on each builder individually.
 
 > [!NOTE]
-> `CoilImageLoaderEventListenerFactory` returns `EventListener.NONE` (zero overhead) when
+> `VunetCoilEventListenerFactory` returns `EventListener.NONE` (zero overhead) when
 > `CoilInstrumentation` has not yet been installed by the OpenTelemetry RUM SDK, so it is
 > safe to register it unconditionally during application startup.
 
@@ -93,7 +93,7 @@ further code changes required.
 | Phase | Class | Action |
 |---|---|---|
 | Request enqueued (any thread) | `CoilOtelEventListener.onStart` | Starts span, calls `makeCurrent()`, stores in `CoilSpanStore` |
-| Fetch runs (coroutine dispatcher) | `CoilOtelInterceptor` | Restores span via `withContext(span.asContextElement())` → OkHttp spans parent to image.load |
+| Fetch runs (coroutine dispatcher) | `VunetCoilInterceptor` | Restores span via `withContext(span.asContextElement())` → OkHttp spans parent to image.load |
 | Request finished | `CoilOtelEventListener.onSuccess` / `onError` | Closes scope, adds attributes, ends span |
 
 ## Disabling via the agent DSL

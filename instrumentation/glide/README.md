@@ -57,14 +57,14 @@ implementation("com.vunetsystems.opentelemetry.android.instrumentation:glide:0.0
 
 ### 2. One-time setup in your AppGlideModule
 
-Register `GlideOtelRequestListener` globally in your `AppGlideModule` so that it receives
+Register `VunetGlideRequestListener` globally in your `AppGlideModule` so that it receives
 the terminal callbacks for every request and ends the span:
 
 ```kotlin
 @GlideModule
 class MyAppGlideModule : AppGlideModule() {
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        builder.addGlobalRequestListener(GlideOtelRequestListener())
+        builder.addGlobalRequestListener(VunetGlideRequestListener())
     }
     // registerComponents() override is NOT required —
     // GlideOtelModule (LibraryGlideModule) handles component registration automatically.
@@ -75,7 +75,7 @@ This is a one-time setup. After this, all Glide requests are traced automaticall
 further code changes required.
 
 > [!NOTE]
-> `GlideOtelRequestListener` must be registered **before** Glide is initialised.
+> `VunetGlideRequestListener` must be registered **before** Glide is initialised.
 > Registering it inside `applyOptions` is the correct and guaranteed-safe location.
 
 > [!NOTE]
@@ -90,8 +90,8 @@ further code changes required.
 |---|---|---|
 | Request started (main thread) | `OtelContextModelLoader` | Starts span, captures OTel context |
 | Fetch runs (background thread) | `OtelContextDataFetcher` | Restores context → OkHttp spans parent to image.load |
-| Request finished | `GlideOtelRequestListener` | Adds attributes, ends span |
-| Memory cache hit | `GlideOtelRequestListener` | Synthesises a span (Glide bypasses ModelLoader for memory hits) |
+| Request finished | `VunetGlideRequestListener` | Adds attributes, ends span |
+| Memory cache hit | `VunetGlideRequestListener` | Synthesises a span (Glide bypasses ModelLoader for memory hits) |
 
 ## Expected test sequence
 
@@ -104,3 +104,28 @@ To verify each `image.source` value in order:
 If the Network button shows `disk_cache` instead of `network`, Glide's disk cache is already
 populated from a prior session. Clear app storage via **Settings → Apps → [App] → Clear Storage**
 and retry.
+
+## Known limitations
+
+### Model-type coverage
+
+The instrumentation only intercepts the network-facing model types that Glide resolves to an
+`InputStream`: `String`, `GlideUrl`, `java.net.URL`, and `android.net.Uri`. Loads from other model
+types — `File`, `byte[]`, `Drawable`/resource IDs, or custom registered models — do **not** pass
+through `OtelContextModelLoader`, so they will:
+
+- not produce a network-path `image.load` span with OkHttp child-span parenting, and
+- for memory-cache hits, still produce a synthesised span via `VunetGlideRequestListener`
+  (since that path keys off the request listener, not the model loader).
+
+In practice BFSI apps load remote images via URL/`String`/`Uri`, which are all covered. If your app
+relies heavily on `File` or resource-ID loads and you need spans for them, additional model types
+would have to be registered in `GlideInstrumentation.registerGlideComponents`.
+
+### Timestamp precision
+
+The `image.load` span start time is set from `System.currentTimeMillis() * 1_000_000`, i.e.
+**millisecond** wall-clock resolution rescaled to nanoseconds — not true nanosecond precision.
+Sub-millisecond operations (notably memory-cache hits) may therefore report a near-zero duration in
+the backend. This is an accepted tradeoff for RUM; finer resolution would require pairing a
+`System.nanoTime()` delta with a clock offset (a pattern used elsewhere in the SDK).

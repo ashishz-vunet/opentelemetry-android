@@ -8,7 +8,6 @@ package io.opentelemetry.android.instrumentation.coil
 import io.mockk.every
 import io.mockk.mockk
 import io.opentelemetry.android.OpenTelemetryRum
-import io.opentelemetry.context.Scope
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
@@ -31,7 +30,6 @@ class CoilInstrumentationTest {
     fun setUp() {
         CoilInstrumentation.tracer = null
         CoilSpanStore.spans.clear()
-        CoilSpanStore.scopes.clear()
         instrumentation = CoilInstrumentation()
         context = mockk(relaxed = true)
         openTelemetryRum = mockk()
@@ -42,7 +40,6 @@ class CoilInstrumentationTest {
     fun tearDown() {
         CoilInstrumentation.tracer = null
         CoilSpanStore.spans.clear()
-        CoilSpanStore.scopes.clear()
     }
 
     @Test
@@ -70,21 +67,17 @@ class CoilInstrumentationTest {
     }
 
     @Test
-    fun `uninstall closes in-flight scopes and ends orphaned spans`() {
+    fun `uninstall ends orphaned in-flight spans and clears the store`() {
         val tracer = otelTesting.openTelemetry.tracerProvider.tracerBuilder("test").build()
         val span = tracer.spanBuilder("orphan").startSpan()
-        var scopeClosed = false
-        val fakeScope = Scope { scopeClosed = true }
 
         CoilSpanStore.spans[42] = span
-        CoilSpanStore.scopes[42] = fakeScope
 
         instrumentation.install(context, openTelemetryRum)
         instrumentation.uninstall(context, openTelemetryRum)
 
-        assertThat(scopeClosed).isTrue()
+        assertThat(span.isRecording).isFalse()
         assertThat(CoilSpanStore.spans).isEmpty()
-        assertThat(CoilSpanStore.scopes).isEmpty()
     }
 
     @Test

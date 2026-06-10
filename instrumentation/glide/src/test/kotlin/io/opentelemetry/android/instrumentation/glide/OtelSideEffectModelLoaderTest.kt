@@ -53,14 +53,12 @@ class OtelSideEffectModelLoaderTest {
     @BeforeEach
     fun setUp() {
         GlideSpanStore.spans.clear()
-        GlideSpanStore.startNanos.clear()
         tracer = otelTesting.openTelemetry.tracerProvider.tracerBuilder("test").build()
     }
 
     @AfterEach
     fun tearDown() {
         GlideSpanStore.spans.clear()
-        GlideSpanStore.startNanos.clear()
     }
 
     // ── span creation ────────────────────────────────────────────────────────
@@ -115,19 +113,6 @@ class OtelSideEffectModelLoaderTest {
         loader.buildLoadData(model, 100, 100, Options())
 
         assertThat(GlideSpanStore.spans).containsKey(System.identityHashCode(model))
-    }
-
-    @Test
-    fun `buildLoadData stores startNanos in GlideSpanStore`() {
-        val loader = makeLoader()
-        val model = "https://cdn.bank.com/logo.png"
-
-        loader.buildLoadData(model, 100, 100, Options())
-
-        val key = System.identityHashCode(model)
-        val stored = GlideSpanStore.startNanos[key]
-        assertThat(stored).isNotNull()
-        assertThat(stored!!).isGreaterThan(0L)
     }
 
     @Test
@@ -225,18 +210,16 @@ class OtelSideEffectModelLoaderTest {
 
         loader.buildLoadData(model, 100, 100, Options())
         val firstSpan = GlideSpanStore.spans[System.identityHashCode(model)]
-        val firstStartNanos = GlideSpanStore.startNanos[System.identityHashCode(model)]
 
         loader.buildLoadData(model, 100, 100, Options())
         val secondSpan = GlideSpanStore.spans[System.identityHashCode(model)]
-        val secondStartNanos = GlideSpanStore.startNanos[System.identityHashCode(model)]
 
         // First span should have been ended (stale cleanup)
         assertThat(firstSpan?.isRecording).isFalse()
         // Second span is fresh and still recording
         assertThat(secondSpan?.isRecording).isTrue()
-        // Start nanos refreshed to a newer timestamp
-        assertThat(secondStartNanos).isGreaterThanOrEqualTo(firstStartNanos!!)
+        // The store now holds the new span instance, not the stale one
+        assertThat(secondSpan).isNotSameAs(firstSpan)
         secondSpan?.end()
     }
 

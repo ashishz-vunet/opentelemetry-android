@@ -20,7 +20,7 @@ import io.opentelemetry.api.trace.Tracer
  * 2. [GlideOtelModule.registerComponents] reads [tracer] and injects [OtelSideEffectModelLoader]
  *    into Glide's component registry — this loader starts an "image.load" span and calls
  *    [io.opentelemetry.api.trace.Span.makeCurrent] for every request.
- * 3. The consumer's `AppGlideModule.applyOptions` registers [GlideOtelRequestListener] globally —
+ * 3. The consumer's `AppGlideModule.applyOptions` registers [VunetGlideRequestListener] globally —
  *    this listener closes the [io.opentelemetry.context.Scope], adds outcome attributes, and ends
  *    the span in `onResourceReady`/`onLoadFailed`.
  *
@@ -29,7 +29,7 @@ import io.opentelemetry.api.trace.Tracer
  * @GlideModule
  * class MyAppGlideModule : AppGlideModule() {
  *     override fun applyOptions(context: Context, builder: GlideBuilder) {
- *         builder.addGlobalRequestListener(GlideOtelRequestListener())
+ *         builder.addGlobalRequestListener(VunetGlideRequestListener())
  *     }
  *     // registerComponents() override is NOT required — GlideOtelModule handles
  *     // component registration automatically via Glide's LibraryGlideModule discovery.
@@ -69,7 +69,6 @@ class GlideInstrumentation : AndroidInstrumentation {
             try { span.end() } catch (_: Throwable) {}
         }
         GlideSpanStore.spans.clear()
-        GlideSpanStore.startNanos.clear()
     }
 
     companion object {

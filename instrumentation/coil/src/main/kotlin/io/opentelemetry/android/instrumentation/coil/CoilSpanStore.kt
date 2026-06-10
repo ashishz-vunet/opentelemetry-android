@@ -6,34 +6,32 @@
 package io.opentelemetry.android.instrumentation.coil
 
 import io.opentelemetry.api.trace.Span
-import io.opentelemetry.context.Scope
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Thread-safe store shared between [CoilOtelEventListener] instances (which start spans) and the
- * same listener's terminal callbacks (which end them).
+ * Thread-safe store shared between [CoilOtelEventListener] (which starts spans) and
+ * [VunetCoilInterceptor] (which reads the span to propagate its context to OkHttp), plus the
+ * listener's own terminal callbacks (which end them).
  *
  * Keys are the identity hash of the Coil [coil.request.ImageRequest] object so that two concurrent
  * requests to the same URL (same String content, different instances) are tracked independently.
  * [System.identityHashCode] collisions are theoretically possible but astronomically rare;
  * the worst outcome is a missed span — never a crash.
  *
- * [drain] is called during [CoilInstrumentation.uninstall] to guarantee that all in-flight scopes
- * are closed and all orphaned spans are ended, preventing [ThreadLocal] leaks.
+ * No OTel [io.opentelemetry.context.Scope] is stored here: [CoilOtelEventListener] deliberately
+ * does not call `makeCurrent()` (see its KDoc), so there is no cross-thread scope to manage.
+ *
+ * [drain] is called during [CoilInstrumentation.uninstall] to guarantee that all orphaned in-flight
+ * spans are ended.
  */
 internal object CoilSpanStore {
     val spans: ConcurrentHashMap<Int, Span> = ConcurrentHashMap()
-    val scopes: ConcurrentHashMap<Int, Scope> = ConcurrentHashMap()
 
     /**
-     * Closes all stored [Scope] entries and ends all stored [Span] entries, then clears both maps.
+     * Ends all stored [Span] entries, then clears the map.
      * Designed to be called exactly once during SDK teardown.
      */
     fun drain() {
-        scopes.values.forEach { scope ->
-            try { scope.close() } catch (_: Throwable) {}
-        }
-        scopes.clear()
         spans.values.forEach { span ->
             try { span.end() } catch (_: Throwable) {}
         }

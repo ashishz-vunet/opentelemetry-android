@@ -22,14 +22,14 @@ import kotlinx.coroutines.withContext
  * Call `addInterceptor` alongside `eventListenerFactory` during ImageLoader construction:
  * ```kotlin
  * val imageLoader = ImageLoader.Builder(context)
- *     .eventListenerFactory(CoilImageLoaderEventListenerFactory())
+ *     .eventListenerFactory(VunetCoilEventListenerFactory())
  *     .components {
- *         add(CoilOtelInterceptor())
+ *         add(VunetCoilInterceptor())
  *     }
  *     .build()
  * ```
  */
-class CoilOtelInterceptor : Interceptor {
+class VunetCoilInterceptor : Interceptor {
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
         val key = System.identityHashCode(chain.request)
         val span = CoilSpanStore.spans[key]

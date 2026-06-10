@@ -79,16 +79,17 @@ internal class OtelContextModelLoader<Model : Any>(
 
         return try {
             val key = System.identityHashCode(model)
-            // Record true start time in wall-clock epoch nanoseconds.
-            // System.nanoTime() is relative to JVM startup, so we convert to absolute time.
+            // Span start timestamp in wall-clock epoch nanoseconds. Note this is millisecond
+            // resolution: System.currentTimeMillis() * 1_000_000 only rescales ms → ns and does
+            // not provide true sub-millisecond precision, so very fast loads may report a near-zero
+            // duration. This is an accepted RUM tradeoff (documented in the README); finer
+            // resolution would require pairing a System.nanoTime() delta with a clock offset.
             val startEpochNanos = System.currentTimeMillis() * 1_000_000
-            val startNanos = System.nanoTime()
 
             // Clean up any stale in-flight span for this model instance (e.g. Glide retry).
             GlideSpanStore.spans.remove(key)?.let { stale ->
                 try { stale.end() } catch (_: Throwable) {}
             }
-            GlideSpanStore.startNanos.remove(key)
 
             val span =
                 tracer
@@ -103,7 +104,6 @@ internal class OtelContextModelLoader<Model : Any>(
             // it on the background thread, propagating the parent span to OkHttp.
             val capturedContext = OtelContext.current().with(span)
             GlideSpanStore.spans[key] = span
-            GlideSpanStore.startNanos[key] = startNanos
 
             ModelLoader.LoadData(
                 delegateData.sourceKey,

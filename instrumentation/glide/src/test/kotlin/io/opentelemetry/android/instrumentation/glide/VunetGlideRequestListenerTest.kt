@@ -20,26 +20,24 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import java.util.concurrent.TimeUnit
 
-class GlideOtelRequestListenerTest {
+class VunetGlideRequestListenerTest {
     companion object {
         @JvmField
         @RegisterExtension
         val otelTesting: OpenTelemetryExtension = OpenTelemetryExtension.create()
     }
 
-    private lateinit var listener: GlideOtelRequestListener
+    private lateinit var listener: VunetGlideRequestListener
 
     @BeforeEach
     fun setUp() {
         GlideSpanStore.spans.clear()
-        GlideSpanStore.startNanos.clear()
-        listener = GlideOtelRequestListener()
+        listener = VunetGlideRequestListener()
     }
 
     @AfterEach
     fun tearDown() {
         GlideSpanStore.spans.clear()
-        GlideSpanStore.startNanos.clear()
     }
 
     /** Simulates what OtelSideEffectModelLoader does before the request fires. */
@@ -59,7 +57,6 @@ class GlideOtelRequestListenerTest {
                 .startSpan()
         val key = System.identityHashCode(model)
         GlideSpanStore.spans[key] = span
-        GlideSpanStore.startNanos[key] = System.nanoTime()
         return span
     }
 
