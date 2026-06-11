@@ -5,8 +5,7 @@
 
 package io.opentelemetry.android.internal.features.persistence
 
-import android.util.Log
-import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.features.diskbuffering.DiskBufferingConfig
 import io.opentelemetry.android.internal.services.storage.CacheStorage
 import java.io.File
@@ -45,7 +44,7 @@ internal class DiskManager(
 
             // Divides the available cache size by 3 (for each signal's folder)
             val calculatedSize = requestedSize / 3
-            Log.d(RumConstants.OTEL_RUM_LOG_TAG, "Requested cache size: %s, folder size: $requestedSize")
+            RumDiagnostics.d { "diskBuffer: requestedCacheSize=$requestedSize folderSize=$calculatedSize" }
             return calculatedSize
         }
 

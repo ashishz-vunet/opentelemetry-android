@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.view.click.internal.APP_SCREEN_CLICK_EVENT_NAME
 import io.opentelemetry.android.instrumentation.view.click.internal.HARDWARE_POINTER_BUTTON
 import io.opentelemetry.android.instrumentation.view.click.internal.HARDWARE_POINTER_CLICKS
@@ -46,6 +47,7 @@ internal class ViewClickEventGenerator(
                     .emit()
 
                 findTargetForTap(window.decorView, motionEvent.x, motionEvent.y)?.let { view ->
+                    RumDiagnostics.d { "viewClick: double-tap view=${view.id}" }
                     createEvent(VIEW_CLICK_EVENT_NAME, tapEvent, 2)
                         .setAllAttributes(createViewAttributes(view))
                         .emit()
@@ -67,6 +69,7 @@ internal class ViewClickEventGenerator(
                     .emit()
 
                 findTargetForTap(window.decorView, motionEvent.x, motionEvent.y)?.let { view ->
+                    RumDiagnostics.d { "viewClick: tap view=${view.id}" }
                     createEvent(VIEW_CLICK_EVENT_NAME, tapEvent, 1)
                         .setAllAttributes(createViewAttributes(view))
                         .emit()

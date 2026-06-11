@@ -11,6 +11,7 @@ android {
 
 dependencies {
     api(platform(libs.opentelemetry.platform.alpha)) // Required for sonatype publishing
+    implementation(project(":common"))
     implementation(project(":instrumentation:android-instrumentation"))
     implementation(project(":agent-api"))
 

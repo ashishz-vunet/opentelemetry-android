@@ -5,8 +5,7 @@
 
 package io.opentelemetry.android.instrumentation.slowrendering
 
-import android.util.Log
-import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.logs.Logger
@@ -31,11 +30,8 @@ internal class EventJankReporter(
             val durationMillis = entry.key
             if ((durationMillis / 1000.0) > threshold) {
                 val count = entry.value
-                if (debugVerbose) {
-                    Log.d(
-                        RumConstants.OTEL_RUM_LOG_TAG,
-                        "* Slow render detected: $durationMillis ms. $count times",
-                    )
+                if (debugVerbose || RumDiagnostics.verbose) {
+                    RumDiagnostics.d { "slowRendering: slow frame ${durationMillis}ms count=$count" }
                 }
                 frameCount += count
             }

@@ -8,6 +8,8 @@ package io.opentelemetry.android.instrumentation.systemmetrics
 import android.content.Context
 import android.util.Log
 import com.google.auto.service.AutoService
+import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.ConfigurableSystemMetricsInstrumentation
@@ -34,11 +36,12 @@ class SystemMetricsInstrumentation : AndroidInstrumentation, ConfigurableSystemM
         openTelemetryRum: OpenTelemetryRum,
     ) {
         if (scheduler != null) return
+        RumDiagnostics.d { "systemMetrics: install interval=${collectionIntervalSeconds}s" }
         val newScheduler = Executors.newSingleThreadScheduledExecutor { r ->
             Thread(r, "otel-system-metrics").apply {
                 isDaemon = true
                 setUncaughtExceptionHandler { _, e ->
-                    Log.e("OpenTelemetryRum", "SystemMetrics: uncaught exception on scheduler thread", e)
+                    Log.e(RumConstants.OTEL_RUM_LOG_TAG, "SystemMetrics: uncaught exception on scheduler thread", e)
                 }
             }
         }

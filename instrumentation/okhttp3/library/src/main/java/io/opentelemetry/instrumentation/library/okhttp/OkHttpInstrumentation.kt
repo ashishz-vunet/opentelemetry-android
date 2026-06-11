@@ -8,6 +8,7 @@ package io.opentelemetry.instrumentation.library.okhttp
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.instrumentation.api.instrumenter.AttributesExtractor
 import io.opentelemetry.instrumentation.api.internal.HttpConstants
@@ -105,6 +106,7 @@ class OkHttpInstrumentation : AndroidInstrumentation {
     fun emitExperimentalHttpClientTelemetry(): Boolean = emitExperimentalHttpClientTelemetry
 
     override fun install(context: Context, openTelemetryRum: OpenTelemetryRum) {
+        RumDiagnostics.d { "okhttp: interceptor install" }
         OkHttpSingletons.configure(this, openTelemetryRum.openTelemetry)
     }
 

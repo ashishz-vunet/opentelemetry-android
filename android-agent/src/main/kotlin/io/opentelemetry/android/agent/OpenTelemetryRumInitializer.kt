@@ -14,6 +14,10 @@ import io.opentelemetry.android.RumBuilder
 import io.opentelemetry.android.agent.connectivity.Compression
 import io.opentelemetry.android.agent.connectivity.HttpEndpointConnectivity
 import io.opentelemetry.android.agent.dsl.OpenTelemetryConfiguration
+import io.opentelemetry.android.agent.export.LoggingLogRecordExporterDecorator
+import io.opentelemetry.android.agent.export.LoggingMetricExporterDecorator
+import io.opentelemetry.android.agent.export.LoggingSpanExporterDecorator
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.agent.session.SessionConfig
 import io.opentelemetry.android.agent.session.SessionIdTimeoutHandler
 import io.opentelemetry.android.agent.session.SessionManager
@@ -54,6 +58,7 @@ object OpenTelemetryRumInitializer {
         val builder = RumBuilder.builder(ctx, rumConfig)
         val cfg = OpenTelemetryConfiguration(rumConfig, instrumentationLoader = builder.instrumentationLoader)
         configuration(cfg)
+        RumDiagnostics.verbose = cfg.diagnosticLogging
 
         val spansEndpoint = cfg.exportConfig.spansEndpoint()
         val logsEndpoints = cfg.exportConfig.logsEndpoint()
@@ -67,10 +72,40 @@ object OpenTelemetryRumInitializer {
             .setSessionProvider(createSessionProvider(ctx, cfg))
             .setResource(resource)
             .setClock(cfg.clock)
-            .addSpanExporterCustomizer { createSpanExporter(spansEndpoint) }
-            .addLogRecordExporterCustomizer { createLogExporter(logsEndpoints) }
-            .addMetricExporterCustomizer { createMetricExporter(metricsEndpoint) }
+            .addSpanExporterCustomizer { wrapSpanExporter(createSpanExporter(spansEndpoint), spansEndpoint, cfg.diagnosticLogging) }
+            .addLogRecordExporterCustomizer { wrapLogExporter(createLogExporter(logsEndpoints), logsEndpoints, cfg.diagnosticLogging) }
+            .addMetricExporterCustomizer { wrapMetricExporter(createMetricExporter(metricsEndpoint), metricsEndpoint, cfg.diagnosticLogging) }
             .build()
+    }
+
+    private fun wrapSpanExporter(
+        exporter: OtlpHttpSpanExporter,
+        endpoint: HttpEndpointConnectivity,
+        diagnosticLogging: Boolean,
+    ) = if (diagnosticLogging) {
+        LoggingSpanExporterDecorator(exporter, endpoint.getUrl())
+    } else {
+        exporter
+    }
+
+    private fun wrapLogExporter(
+        exporter: OtlpHttpLogRecordExporter,
+        endpoint: HttpEndpointConnectivity,
+        diagnosticLogging: Boolean,
+    ) = if (diagnosticLogging) {
+        LoggingLogRecordExporterDecorator(exporter, endpoint.getUrl())
+    } else {
+        exporter
+    }
+
+    private fun wrapMetricExporter(
+        exporter: OtlpHttpMetricExporter,
+        endpoint: HttpEndpointConnectivity,
+        diagnosticLogging: Boolean,
+    ) = if (diagnosticLogging) {
+        LoggingMetricExporterDecorator(exporter, endpoint.getUrl())
+    } else {
+        exporter
     }
 
     private fun createSpanExporter(endpoint: HttpEndpointConnectivity): OtlpHttpSpanExporter =

@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.View
 import android.view.Window
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_WIDGET_SOURCE
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.SOURCE_COMPOSE
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.TapGestureClassifier
@@ -132,6 +133,7 @@ internal class ClickEventGenerator(
             return
         }
         window.callback = WindowCallbackWrapper(currentCallback, this)
+        RumDiagnostics.d { "hybridClick: window callback attached" }
     }
 
     /**
@@ -148,6 +150,10 @@ internal class ClickEventGenerator(
             findComposeTarget(window.decorView, event.x, event.y)
                 ?: viewTapTargetDetector.findTapTarget(window.decorView, event.x, event.y)
                 ?: return
+
+        RumDiagnostics.d {
+            "hybridClick: tap -> Click span target=${target.widgetId} source=${target.source}"
+        }
 
         val span =
             tracer.spanBuilder(UI_CLICK_SPAN_NAME)

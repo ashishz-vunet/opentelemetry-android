@@ -5,6 +5,7 @@
 
 package io.opentelemetry.instrumentation.library.okhttp.internal
 
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.context.Context
 import io.opentelemetry.instrumentation.api.incubator.semconv.http.HttpClientServicePeerAttributesExtractor
@@ -72,7 +73,17 @@ object OkHttpSingletons {
         val instrumenter = instrumenterBuilder.build()
 
         connectionErrorInterceptor = ConnectionErrorSpanInterceptor(instrumenter)
-        tracingInterceptor = TracingInterceptor(instrumenter, openTelemetry.propagators)
+        val tracing = TracingInterceptor(instrumenter, openTelemetry.propagators)
+        tracingInterceptor =
+            Interceptor { chain ->
+                val request = chain.request()
+                RumDiagnostics.d { "okhttp: request method=${request.method} host=${request.url.host}" }
+                val response = tracing.intercept(chain)
+                RumDiagnostics.d {
+                    "okhttp: response code=${response.code} method=${request.method} host=${request.url.host}"
+                }
+                response
+            }
     }
 
     @JvmField

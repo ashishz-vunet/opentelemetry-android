@@ -6,6 +6,7 @@
 package io.opentelemetry.android.instrumentation.anr
 
 import android.os.Handler
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.internal.utils.threadIdCompat
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.api.common.Attributes
@@ -67,6 +68,7 @@ internal class AnrWatcher(
         }
         if (anrCounter.incrementAndGet() >= 5) {
             val stackTrace = mainThread.stackTrace
+            RumDiagnostics.d { "anr: detected thread=${mainThread.name}" }
             emitAnrEvent(stackTrace)
             // only report once per 5s.
             anrCounter.set(0)

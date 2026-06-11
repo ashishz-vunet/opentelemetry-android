@@ -8,6 +8,7 @@ package io.opentelemetry.android.instrumentation.crash
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 
@@ -25,6 +26,7 @@ class CrashReporterInstrumentation : AndroidInstrumentation {
     override fun install(context: Context, openTelemetryRum: OpenTelemetryRum) {
         addAttributesExtractor(RuntimeDetailsExtractor.create(context))
         val crashReporter = CrashReporter(additionalExtractors)
+        RumDiagnostics.d { "crash: handler install" }
         crashReporter.install(openTelemetryRum.openTelemetry)
     }
 

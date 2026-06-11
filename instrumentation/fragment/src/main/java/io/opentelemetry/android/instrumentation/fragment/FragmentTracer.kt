@@ -7,6 +7,7 @@ package io.opentelemetry.android.instrumentation.fragment
 
 import androidx.fragment.app.Fragment
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.common.ActiveSpan
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.trace.Span
@@ -25,11 +26,13 @@ internal class FragmentTracer(
             return this
         }
         activeSpan.startSpan { createLifecycleSpan(lifecycleEvent) }
+        RumDiagnostics.d { "fragment: span start event=$lifecycleEvent fragment=$fragmentName" }
         return this
     }
 
     fun startFragmentCreation(): FragmentTracer {
         activeSpan.startSpan { createLifecycleSpan("Created") }
+        RumDiagnostics.d { "fragment: span start event=Created fragment=$fragmentName" }
         return this
     }
 
@@ -48,6 +51,7 @@ internal class FragmentTracer(
 
     fun endActiveSpan() {
         activeSpan.endActiveSpan()
+        RumDiagnostics.d { "fragment: span end fragment=$fragmentName" }
     }
 
     fun addPreviousScreenAttribute(): FragmentTracer {

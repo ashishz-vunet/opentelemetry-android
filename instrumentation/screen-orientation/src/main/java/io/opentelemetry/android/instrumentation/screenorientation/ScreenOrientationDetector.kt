@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Configuration.ORIENTATION_LANDSCAPE
 import android.content.res.Configuration.ORIENTATION_PORTRAIT
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.api.logs.Logger
 
 /**
@@ -39,6 +40,7 @@ internal class ScreenOrientationDetector(
             .setEventName(EVENT_NAME)
             .setAttribute(SCREEN_ORIENTATION, orientation)
             .emit()
+        RumDiagnostics.d { "screenOrientation: change orientation=$orientation" }
     }
 
     private val Int.name: String

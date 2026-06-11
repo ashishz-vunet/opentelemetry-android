@@ -6,6 +6,7 @@
 package io.opentelemetry.android.instrumentation.navigation.common
 
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_DESTINATION_NAME_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_DESTINATION_TYPE_KEY
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationConstants.NAVIGATION_ENTRY_TYPE_KEY
@@ -52,5 +53,8 @@ class NavigationSpanEmitter(
         // Set screen.name after start so it wins over default attribute appenders.
         span.setAttribute(SCREEN_NAME_KEY, candidate.destination.name)
         span.end()
+        RumDiagnostics.d {
+            "navigation: span dest=${candidate.destination.name} type=${candidate.destination.type.name.lowercase()}"
+        }
     }
 }

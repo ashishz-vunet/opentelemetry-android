@@ -5,6 +5,7 @@
 
 package io.opentelemetry.android.internal.services.applifecycle
 
+import io.opentelemetry.android.common.RumDiagnostics
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import java.io.Closeable
@@ -20,12 +21,14 @@ internal class ApplicationStateWatcher :
         CopyOnWriteArrayList()
 
     override fun onStart(owner: LifecycleOwner) {
+        RumDiagnostics.d { "lifecycle: foreground" }
         for (listener in applicationStateListeners) {
             listener.onApplicationForegrounded()
         }
     }
 
     override fun onStop(owner: LifecycleOwner) {
+        RumDiagnostics.d { "lifecycle: background" }
         for (listener in applicationStateListeners) {
             listener.onApplicationBackgrounded()
         }

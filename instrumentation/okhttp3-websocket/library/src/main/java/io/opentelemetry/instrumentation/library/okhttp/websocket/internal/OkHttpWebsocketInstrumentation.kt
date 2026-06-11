@@ -8,11 +8,13 @@ package io.opentelemetry.instrumentation.library.okhttp.websocket.internal
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 
 @AutoService(AndroidInstrumentation::class)
 class OkHttpWebsocketInstrumentation : AndroidInstrumentation {
     override fun install(context: Context, openTelemetryRum: OpenTelemetryRum) {
+        RumDiagnostics.d { "okhttpWs: install" }
         WebsocketListenerWrapper.configure(openTelemetryRum.openTelemetry)
     }
 

@@ -16,6 +16,7 @@ import androidx.annotation.RequiresApi
 import io.opentelemetry.android.common.StartupTimestampProvider
 import java.util.ServiceLoader
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.internal.services.visiblescreen.activities.DefaultingActivityLifecycleCallbacks
 import android.view.ViewTreeObserver
 import io.opentelemetry.api.common.Attributes
@@ -284,7 +285,7 @@ internal class AppStartupTimer(
         uiInitStarted = true
         startupSpan?.let { recordContentProviderEndEvents(it) }
         if (spanStartNanos + MAX_TIME_TO_UI_INIT < startupClock.now()) {
-            Log.d(RumConstants.OTEL_RUM_LOG_TAG, "Max time to UI init exceeded")
+            RumDiagnostics.d { "activityStartup: max time to UI init exceeded" }
             uiInitTooLate = true
             clear()
         }

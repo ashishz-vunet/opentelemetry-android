@@ -14,6 +14,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":common"))
     implementation(project(":instrumentation:android-instrumentation"))
     compileOnly(libs.okhttp)
     api(libs.opentelemetry.instrumentation.okhttp)
