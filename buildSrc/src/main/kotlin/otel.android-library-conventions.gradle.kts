@@ -106,6 +106,10 @@ plugins.withId("org.jetbrains.kotlinx.binary-compatibility-validator") {
     val ignoredModules = listOf("test-common")
     configure<ApiValidationExtension> {
         validationDisabled = ignoredModules.contains(project.name)
+        // Exclude KSP build output that is not intentional public API surface. The Glide KSP
+        // processor emits an indexer class (GlideIndexer_GlideModule_*) into this package; it would
+        // otherwise show up in the .api dump and cause noisy diffs on every KSP regeneration.
+        ignoredPackages.add("com.bumptech.glide.annotation.ksp")
     }
 
     val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
