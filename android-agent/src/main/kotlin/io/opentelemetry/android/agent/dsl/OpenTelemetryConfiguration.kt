@@ -34,6 +34,11 @@ class OpenTelemetryConfiguration internal constructor(
     internal var resourceAction: ResourceBuilder.() -> Unit = {}
 
     /**
+     * When true, enables verbose diagnostics across instrumentations and OTLP export decorators.
+     */
+    var diagnosticLogging: Boolean = false
+
+    /**
      * Configures how OpenTelemetry should export telemetry over HTTP.
      */
     fun httpExport(action: HttpExportConfiguration.() -> Unit) {

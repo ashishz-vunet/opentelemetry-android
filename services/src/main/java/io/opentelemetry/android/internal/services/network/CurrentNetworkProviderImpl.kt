@@ -14,6 +14,7 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.internal.features.networkattributes.data.CurrentNetwork
 import io.opentelemetry.android.internal.services.network.detector.NetworkDetector
 import java.util.concurrent.CopyOnWriteArrayList
@@ -115,7 +116,7 @@ internal class CurrentNetworkProviderImpl(
     private inner class ConnectionMonitor : NetworkCallback() {
         override fun onAvailable(network: Network) {
             val activeNetwork = refreshNetworkStatus()
-            Log.d(RumConstants.OTEL_RUM_LOG_TAG, "  onAvailable: currentNetwork=$activeNetwork")
+            RumDiagnostics.d { "network: onAvailable state=${activeNetwork.state}" }
 
             notifyListeners(activeNetwork)
         }
@@ -127,7 +128,7 @@ internal class CurrentNetworkProviderImpl(
             // state at the right time during this event.
             val currentNetwork = CurrentNetworkProvider.NO_NETWORK
             this@CurrentNetworkProviderImpl.currentNetwork = currentNetwork
-            Log.d(RumConstants.OTEL_RUM_LOG_TAG, "  onLost: currentNetwork=$currentNetwork")
+            RumDiagnostics.d { "network: onLost" }
 
             notifyListeners(currentNetwork)
         }

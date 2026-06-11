@@ -8,6 +8,7 @@ package io.opentelemetry.android.instrumentation.network
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.internal.features.networkattributes.data.CurrentNetwork
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.internal.services.Services.Companion.get
@@ -37,6 +38,7 @@ class NetworkChangeInstrumentation : AndroidInstrumentation {
         val services = get(context)
         val listener = NetworkApplicationListener(services.currentNetworkProvider)
         val logger = openTelemetryRum.openTelemetry.logsBridge["io.opentelemetry.network"]
+        RumDiagnostics.d { "network: monitoring install" }
         listener.startMonitoring(logger, additionalAttributeExtractors)
         services.appLifecycle.registerListener(listener)
         networkApplicationListener = listener

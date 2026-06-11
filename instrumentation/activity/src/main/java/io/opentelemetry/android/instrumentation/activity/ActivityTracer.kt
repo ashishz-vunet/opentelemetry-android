@@ -6,6 +6,7 @@
 package io.opentelemetry.android.instrumentation.activity
 
 import android.app.Activity
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY
 import io.opentelemetry.android.common.RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME
 import io.opentelemetry.android.common.RumConstants.APP_START_SPAN_NAME
@@ -34,11 +35,13 @@ internal class ActivityTracer(
             return this
         }
         activeSpan.startSpan { createLifecycleSpan(lifecycleEvent) }
+        RumDiagnostics.d { "activity: span start event=$lifecycleEvent activity=$activityName" }
         return this
     }
 
     fun startActivityCreation(): ActivityTracer {
         activeSpan.startSpan { this.makeCreationSpan() }
+        RumDiagnostics.d { "activity: span start event=Created activity=$activityName" }
         return this
     }
 
@@ -120,6 +123,7 @@ internal class ActivityTracer(
         // out of the startup phase.
         appStartupTimer.end()
         activeSpan.endActiveSpan()
+        RumDiagnostics.d { "activity: span end activity=$activityName" }
     }
 
     fun addPreviousScreenAttribute(): ActivityTracer {

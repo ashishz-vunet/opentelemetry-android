@@ -7,6 +7,7 @@ package io.opentelemetry.android.instrumentation.startup
 
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.config.OtelRumConfig
 import io.opentelemetry.android.internal.initialization.InitializationEvents
 import io.opentelemetry.api.OpenTelemetry
@@ -64,6 +65,7 @@ class SdkInitializationEvents(
     internal fun finish(openTelemetry: OpenTelemetry) {
         val logger = openTelemetry.logsBridge.loggerBuilder("otel.initialization.events").build()
         eventLogger.set(logger)
+        RumDiagnostics.d { "startup: finish emitting ${events.size} queued init events" }
         logger.emitInitEvents()
     }
 

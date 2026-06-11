@@ -9,6 +9,7 @@ import android.app.Application
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.common.Constants.INSTRUMENTATION_SCOPE
 import io.opentelemetry.android.instrumentation.navigation.common.NavigationSpanEmitter
@@ -26,6 +27,7 @@ class ViewNavigationInstrumentation : AndroidInstrumentation {
         if (activityLifecycleCallbacks != null) {
             return
         }
+        RumDiagnostics.d { "navigationView: install" }
         val tracer = openTelemetryRum.openTelemetry.getTracer(INSTRUMENTATION_SCOPE)
         val callback = ViewNavigationCollector(NavigationSpanEmitter(tracer), openTelemetryRum.clock)
         activityLifecycleCallbacks = callback

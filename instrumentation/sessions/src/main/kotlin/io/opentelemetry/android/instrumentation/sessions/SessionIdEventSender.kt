@@ -6,6 +6,7 @@
 package io.opentelemetry.android.instrumentation.sessions
 
 import io.opentelemetry.android.common.RumConstants.Events.EVENT_SESSION_END
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.RumConstants.Events.EVENT_SESSION_START
 import io.opentelemetry.android.session.Session
 import io.opentelemetry.android.session.SessionObserver
@@ -34,6 +35,7 @@ internal class SessionIdEventSender(
             eventBuilder.setAttribute(SESSION_PREVIOUS_ID, previousSessionId)
         }
         eventBuilder.emit()
+        RumDiagnostics.d { "session: start id=${newSession.id}" }
     }
 
     override fun onSessionEnded(session: Session) {
@@ -45,5 +47,6 @@ internal class SessionIdEventSender(
             .setEventName(EVENT_SESSION_END)
             .setAttribute(SESSION_ID, session.id)
             .emit()
+        RumDiagnostics.d { "session: end id=${session.id}" }
     }
 }

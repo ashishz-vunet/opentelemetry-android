@@ -5,8 +5,7 @@
 
 package io.opentelemetry.android.instrumentation.slowrendering
 
-import android.util.Log
-import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.Tracer
 import java.time.Instant
@@ -28,16 +27,10 @@ internal class SpanBasedJankReporter(
             val duration = entry.key
             val count = entry.value
             if (duration > FROZEN_THRESHOLD_MS) {
-                Log.d(
-                    RumConstants.OTEL_RUM_LOG_TAG,
-                    "* FROZEN RENDER DETECTED: $duration ms.$count times",
-                )
+                RumDiagnostics.d { "slowRendering: frozen frame ${duration}ms count=$count" }
                 frozenCount += count
             } else if (duration > SLOW_THRESHOLD_MS) {
-                Log.d(
-                    RumConstants.OTEL_RUM_LOG_TAG,
-                    "* Slow render detected: $duration ms. $count times",
-                )
+                RumDiagnostics.d { "slowRendering: slow frame ${duration}ms count=$count" }
                 slowCount += count
             }
         }

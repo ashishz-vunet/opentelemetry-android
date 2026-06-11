@@ -9,6 +9,7 @@ import android.app.Application
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.ConfigurableHybridClickInstrumentation
 
@@ -35,6 +36,7 @@ class HybridClickInstrumentation : AndroidInstrumentation, ConfigurableHybridCli
         if (activityLifecycleCallback != null) {
             return
         }
+        RumDiagnostics.d { "hybridClick: install" }
 
         val tracer =
             openTelemetryRum.openTelemetry

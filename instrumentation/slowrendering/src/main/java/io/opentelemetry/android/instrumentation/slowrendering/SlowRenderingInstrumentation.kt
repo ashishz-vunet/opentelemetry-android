@@ -12,6 +12,7 @@ import android.util.Log
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import java.time.Duration
 
@@ -82,9 +83,11 @@ class SlowRenderingInstrumentation : AndroidInstrumentation {
             return
         }
 
+        val verbose = debugVerbose || RumDiagnostics.verbose
+        RumDiagnostics.d { "slowRendering: install verbose=$verbose" }
         val logger = openTelemetryRum.openTelemetry.logsBridge.get("app.jank")
-        var jankReporter: JankReporter = EventJankReporter(logger, SLOW_THRESHOLD_MS / 1000.0, debugVerbose)
-        jankReporter = jankReporter.combine(EventJankReporter(logger, FROZEN_THRESHOLD_MS / 1000.0, debugVerbose))
+        var jankReporter: JankReporter = EventJankReporter(logger, SLOW_THRESHOLD_MS / 1000.0, verbose)
+        jankReporter = jankReporter.combine(EventJankReporter(logger, FROZEN_THRESHOLD_MS / 1000.0, verbose))
 
         if (useDeprecatedSpan) {
             val tracer = openTelemetryRum.openTelemetry.getTracer("io.opentelemetry.slow-rendering")

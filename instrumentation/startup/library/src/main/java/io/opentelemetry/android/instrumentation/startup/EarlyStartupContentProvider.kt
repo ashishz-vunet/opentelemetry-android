@@ -5,6 +5,7 @@
 
 package io.opentelemetry.android.instrumentation.startup
 
+import io.opentelemetry.android.common.RumDiagnostics
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
@@ -31,6 +32,7 @@ import android.net.Uri
 class EarlyStartupContentProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         ProcessStartTimestamps.contentProviderEpochMs = System.currentTimeMillis()
+        RumDiagnostics.d { "startup: content provider init timestamp captured" }
         return true
     }
 

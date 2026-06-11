@@ -10,6 +10,7 @@ import android.os.Looper
 import androidx.annotation.VisibleForTesting
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.android.internal.services.Services.Companion.get
@@ -52,6 +53,7 @@ class AnrInstrumentation : AndroidInstrumentation {
                 get(context).appLifecycle,
                 openTelemetryRum.openTelemetry,
             )
+        RumDiagnostics.d { "anr: watchdog install" }
         anrDetector.start()
     }
 

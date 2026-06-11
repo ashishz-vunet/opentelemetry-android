@@ -5,6 +5,7 @@
 
 package io.opentelemetry.android.instrumentation.crash
 
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.internal.utils.threadIdCompat
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.api.OpenTelemetry
@@ -37,6 +38,7 @@ internal class CrashReporter(
     }
 
     private fun processCrash(crashDetails: CrashDetails) {
+        RumDiagnostics.d { "crash: captured type=${crashDetails.cause.javaClass.simpleName}" }
         val throwable = crashDetails.cause
         val thread = crashDetails.thread
         val attributesBuilder =

@@ -28,6 +28,16 @@ public final class io/opentelemetry/android/common/RumConstants$Events {
 	public static final field INSTANCE Lio/opentelemetry/android/common/RumConstants$Events;
 }
 
+public final class io/opentelemetry/android/common/RumDiagnostics {
+	public static final field INSTANCE Lio/opentelemetry/android/common/RumDiagnostics;
+	public final fun d (Lkotlin/jvm/functions/Function0;)V
+	public final fun getVerbose ()Z
+	public final fun i (Lkotlin/jvm/functions/Function0;)V
+	public final fun setVerbose (Z)V
+	public final fun w (Lkotlin/jvm/functions/Function0;)V
+	public final fun w (Lkotlin/jvm/functions/Function0;Ljava/lang/Throwable;)V
+}
+
 public abstract interface class io/opentelemetry/android/common/StartupTimestampProvider {
 	public abstract fun getAttachBaseContextEndElapsedRealtime ()J
 	public abstract fun getAttachBaseContextStartElapsedRealtime ()J

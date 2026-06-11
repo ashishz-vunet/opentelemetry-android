@@ -10,6 +10,7 @@ import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.trace.SpanKind
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
@@ -106,6 +107,9 @@ internal class SystemMetricsSpanEmitter(
                 .startSpan()
         span.addEvent("app.metrics", buildAttributes(sample))
         span.end()
+        RumDiagnostics.d {
+            "systemMetrics: emit cpu=${sample.cpuUsage} threads=${sample.threadCount}"
+        }
     }
 
     private fun buildAttributes(sample: ProcessSample): Attributes =

@@ -5,8 +5,7 @@
 
 package io.opentelemetry.android.export
 
-import android.util.Log
-import io.opentelemetry.android.common.RumConstants.OTEL_RUM_LOG_TAG
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.api.internal.GuardedBy
 import io.opentelemetry.sdk.common.CompletableResultCode
 import java.nio.BufferOverflowException
@@ -93,8 +92,8 @@ internal class DelegatingExporter<D, T>(
                 val amountToTake = maxBufferedData - buffer.size
                 buffer.addAll(data.take(amountToTake))
                 if (amountToTake < data.size) {
-                    Log.w(OTEL_RUM_LOG_TAG, "The $logType buffer was filled before export delegate set...")
-                    Log.w(OTEL_RUM_LOG_TAG, "This has resulted in a loss of $logType!")
+                    RumDiagnostics.w { "diskBuffer: $logType buffer filled before delegate set" }
+                    RumDiagnostics.w { "diskBuffer: loss of $logType" }
                 }
 
                 // If all the data was dropped we return an exception
