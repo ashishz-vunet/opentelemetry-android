@@ -48,31 +48,66 @@ and the event listener factory must be registered (see Installation below).
 
 ## Installation
 
-### 1. Add the dependency
+Two one-time steps for a customer app: declare the dependencies, then register the Coil hooks
+once in `Application.onCreate`. After that **every** image load — whether from a View
+`imageView.load(url)` or a Compose `AsyncImage(...)` — is traced automatically with no
+per-call-site changes.
+
+The telemetry SDK itself is started for you: when the `vunet.telemetry.android` Gradle plugin is
+applied with `autoInitialize = true`, `VunetAutoInitProvider` boots the OpenTelemetry RUM SDK at
+process start and calls `CoilInstrumentation.install()`, which provisions the tracer the hooks
+below read from. You do **not** call `OpenTelemetryRumInitializer.initialize` yourself.
+
+### 1. Add the dependencies
+
+The OTel Coil instrumentation is `compileOnly` against Coil, so add **both** the Coil library and
+the instrumentation artifact to your app module:
 
 ```kotlin
-implementation("com.vunetsystems.opentelemetry.android.instrumentation:coil:0.0.1-SNAPSHOT-dev")
+dependencies {
+    implementation(libs.coil)              // coil-kt 2.x (your app already uses this)
+    implementation(libs.coil.compose)      // only if you use AsyncImage
+
+    // OTel Coil instrumentation (pulled in transitively by the Vunet SDK, or add it directly):
+    implementation("com.vunetsystems.opentelemetry.android.instrumentation:coil:0.0.1-SNAPSHOT-dev")
+}
 ```
 
-### 2. One-time setup in Application.onCreate or your DI graph
+### 2. Register the Coil hooks once in Application.onCreate
 
 Register both `VunetCoilEventListenerFactory` (span lifecycle) and `VunetCoilInterceptor`
-(OkHttp context propagation) with Coil's `ImageLoader` builder:
+(OkHttp context propagation) on a single `ImageLoader`, then publish it as Coil's singleton so the
+top-level extensions and Compose `AsyncImage` all use it:
 
 ```kotlin
-val imageLoader = ImageLoader.Builder(context)
-    .eventListenerFactory(VunetCoilEventListenerFactory())
-    .components {
-        add(VunetCoilInterceptor())
+class SampleApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Coil.setImageLoader(
+            ImageLoader.Builder(this)
+                .eventListenerFactory(VunetCoilEventListenerFactory())
+                .components {
+                    add(VunetCoilInterceptor())
+                }
+                .build(),
+        )
     }
-    .build()
-
-// Make this the singleton loader used by Coil's top-level extension functions:
-Coil.setImageLoader(imageLoader)
+}
 ```
 
-This is a one-time setup. After this, all Coil requests are traced automatically with no
-further code changes required.
+### 3. Use Coil as usual — no call-site changes
+
+Once the singleton loader is set, existing code is traced with no modification, in both UI styles:
+
+```kotlin
+// View / XML
+imageView.load("https://example.com/avatar.png")
+
+// Jetpack Compose (coil-compose) — covered automatically by the singleton loader
+AsyncImage(model = "https://example.com/avatar.png", contentDescription = null)
+```
+
+Each of these now emits an `image.load` span, with OkHttp child spans on the network path.
 
 > [!NOTE]
 > Both `VunetCoilEventListenerFactory` **and** `VunetCoilInterceptor` must be registered.

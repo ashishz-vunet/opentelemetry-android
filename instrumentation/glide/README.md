@@ -49,30 +49,60 @@ No additional configuration is required.
 
 ## Installation
 
-### 1. Add the dependency
+The wiring differs by UI style. **View / XML apps** (`Glide.with(...).load(...).into(...)`)
+register the listener once via an `AppGlideModule`. **Jetpack Compose apps** that use the
+`GlideImage` composable register the listener inline on each call — no `AppGlideModule` and no
+`kapt` are required. Pick the section that matches your app.
+
+The telemetry SDK itself is started for you: when the `vunet.telemetry.android` Gradle plugin is
+applied with `autoInitialize = true`, `VunetAutoInitProvider` boots the OpenTelemetry RUM SDK at
+process start and calls `GlideInstrumentation.install()`, which provisions the tracer the hooks
+below read from. You do **not** call `OpenTelemetryRumInitializer.initialize` yourself.
+
+### 1. Add the dependencies
+
+The OTel Glide instrumentation is `compileOnly` against Glide, so add the Glide library yourself
+alongside the instrumentation artifact:
 
 ```kotlin
-implementation("com.vunetsystems.opentelemetry.android.instrumentation:glide:0.0.1-SNAPSHOT-dev")
-```
+plugins {
+    id("kotlin-kapt") // View/XML apps only — needed to generate the AppGlideModule glue
+}
 
-### 2. One-time setup in your AppGlideModule
+dependencies {
+    implementation(libs.glide)
+    implementation(libs.glide.okhttp)      // OkHttp integration → enables network child spans
+    kapt(libs.glide.compiler)              // View/XML apps only (processes @GlideModule)
+    implementation(libs.glide.compose)     // Compose apps only — the GlideImage composable
 
-Register `VunetGlideRequestListener` globally in your `AppGlideModule` so that it receives
-the terminal callbacks for every request and ends the span:
-
-```kotlin
-@GlideModule
-class MyAppGlideModule : AppGlideModule() {
-    override fun applyOptions(context: Context, builder: GlideBuilder) {
-        builder.addGlobalRequestListener(VunetGlideRequestListener())
-    }
-    // registerComponents() override is NOT required —
-    // GlideOtelModule (LibraryGlideModule) handles component registration automatically.
+    // OTel Glide instrumentation (pulled in transitively by the Vunet SDK, or add it directly):
+    implementation("com.vunetsystems.opentelemetry.android.instrumentation:glide:0.0.1-SNAPSHOT-dev")
 }
 ```
 
-This is a one-time setup. After this, all Glide requests are traced automatically with no
-further code changes required.
+### 2a. View / XML apps — register once in your AppGlideModule
+
+Register `VunetGlideRequestListener` globally so it receives the terminal callbacks for every
+request and ends the span:
+
+```kotlin
+@GlideModule
+class SampleAppGlideModule : AppGlideModule() {
+    override fun applyOptions(context: Context, builder: GlideBuilder) {
+        builder.addGlobalRequestListener(VunetGlideRequestListener())
+    }
+
+    // Optional: GlideOtelModule (a LibraryGlideModule) already injects the OTel model loaders
+    // automatically at startup. Override registerComponents only if you want to be explicit
+    // (e.g. a custom GlideBuilder that bypasses LibraryGlideModule auto-discovery):
+    override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
+        GlideInstrumentation.registerGlideComponents(registry)
+    }
+}
+```
+
+After this one-time setup, all `Glide.with(...).load(...).into(...)` calls are traced
+automatically with no further code changes.
 
 > [!NOTE]
 > `VunetGlideRequestListener` must be registered **before** Glide is initialised.
@@ -80,9 +110,33 @@ further code changes required.
 
 > [!NOTE]
 > `GlideOtelModule` is a `LibraryGlideModule` that Glide discovers automatically at startup.
-> It injects the `OtelContextModelLoader` into Glide's component registry. You do **not** need
-> to call `GlideInstrumentation.registerGlideComponents()` manually from your own
-> `AppGlideModule.registerComponents()`.
+> It injects the `OtelContextModelLoader` into Glide's component registry, so overriding
+> `registerComponents()` yourself is optional in the standard setup.
+
+### 2b. Jetpack Compose apps — register inline on each GlideImage
+
+The `GlideImage` composable does not go through your `AppGlideModule`, so register the listener
+inline via the `requestBuilderTransform` lambda. No `AppGlideModule` or `kapt` is needed:
+
+```kotlin
+@OptIn(ExperimentalGlideComposeApi::class)
+@Composable
+fun Avatar(url: String) {
+    GlideImage(
+        model = url,
+        contentDescription = null,
+    ) {
+        @Suppress("UNCHECKED_CAST")
+        it.listener(
+            VunetGlideRequestListener()
+                as RequestListener<android.graphics.drawable.Drawable>,
+        )
+    }
+}
+```
+
+`GlideOtelModule` is still auto-discovered, so network child-span parenting works the same way;
+only the terminal listener has to be attached per call in Compose.
 
 ## How it works
 
