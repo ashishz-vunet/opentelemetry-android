@@ -74,7 +74,9 @@ object OpenTelemetryRumInitializer {
             .setClock(cfg.clock)
             .addSpanExporterCustomizer { wrapSpanExporter(createSpanExporter(spansEndpoint), spansEndpoint, cfg.diagnosticLogging) }
             .addLogRecordExporterCustomizer { wrapLogExporter(createLogExporter(logsEndpoints), logsEndpoints, cfg.diagnosticLogging) }
-            .addMetricExporterCustomizer { wrapMetricExporter(createMetricExporter(metricsEndpoint), metricsEndpoint, cfg.diagnosticLogging) }
+            .addMetricExporterCustomizer {
+                wrapMetricExporter(createMetricExporter(metricsEndpoint), metricsEndpoint, cfg.diagnosticLogging)
+            }
             .build()
     }
 

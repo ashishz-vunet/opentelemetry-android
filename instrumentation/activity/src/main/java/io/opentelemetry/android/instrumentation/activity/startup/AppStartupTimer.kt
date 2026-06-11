@@ -11,7 +11,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.os.SystemClock
-import android.util.Log
 import androidx.annotation.RequiresApi
 import io.opentelemetry.android.common.StartupTimestampProvider
 import java.util.ServiceLoader
