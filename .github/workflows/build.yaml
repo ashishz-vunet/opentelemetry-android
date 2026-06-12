@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
       - release/*
   workflow_dispatch:
 
@@ -37,13 +38,6 @@ jobs:
       - name: build demo app
         working-directory: ./demo-app
         run: ./gradlew check assemble --stacktrace
-      - name: publish snapshot
-        run: ./gradlew publishToSonatype
-        env:
-          SONATYPE_USER: ${{ secrets.SONATYPE_USER }}
-          SONATYPE_KEY: ${{ secrets.SONATYPE_KEY }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
 
   markdown-link-check:
     # release branches are excluded to avoid unnecessary maintenance

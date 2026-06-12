@@ -135,7 +135,7 @@ See the following pages for details about the related topics:
 - [Kotlin-First Policy](./docs/KOTLIN_FIRST.md)
 - [StrictMode Guidance](./docs/STRICTMODE.md)
 - [Exporter Management](./docs/EXPORTER_CHAIN.md)
-- [Fork publishing and consumption](./docs/FORK_GITHUB_PACKAGES.md)
+- [Maven Central publishing and consumption](./docs/MAVEN_CENTRAL.md)
 
 # Contributing
 
@@ -173,6 +173,6 @@ For more information about the Approver role, see the [community repository](htt
 
 [ci-url]: https://github.com/open-telemetry/opentelemetry-android/actions?query=workflow%3Abuild+branch%3Amain
 
-[maven-image]: https://img.shields.io/maven-central/v/io.opentelemetry.android/android-agent.svg
+[maven-image]: https://img.shields.io/maven-central/v/com.vunetsystems.opentelemetry.android/android-agent.svg
 
-[maven-url]: https://central.sonatype.com/artifact/io.opentelemetry.android/android-agent
+[maven-url]: https://central.sonatype.com/artifact/com.vunetsystems.opentelemetry.android/android-agent

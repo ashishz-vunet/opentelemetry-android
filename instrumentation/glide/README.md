@@ -76,7 +76,7 @@ dependencies {
     implementation(libs.glide.compose)     // Compose apps only — the GlideImage composable
 
     // OTel Glide instrumentation (pulled in transitively by the Vunet SDK, or add it directly):
-    implementation("com.vunetsystems.opentelemetry.android.instrumentation:glide:0.0.1-SNAPSHOT-dev")
+    implementation("com.vunetsystems.opentelemetry.android.instrumentation:glide:0.0.1-SNAPSHOT")
 }
 ```
 

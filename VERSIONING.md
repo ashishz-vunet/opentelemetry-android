@@ -1,22 +1,23 @@
 # OpenTelemetry Android Versioning
 
-This document address a variety of versioning and release considerations for
-the OpenTelemetry Android project.
+This document addresses versioning and release considerations for this fork.
 
-## VuNet fork — dev versioning
+## VuNet fork — Maven Central versioning
 
 This fork (`com.vunetsystems.opentelemetry.android`) uses a single published version for
 **every** module so consumers can align dependencies with one BOM coordinate.
 
 ### Published coordinates
 
-| Role | Maven coordinate (current dev line) |
-|------|-------------------------------------|
-| BOM | `com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT-dev` |
-| Agent entry | `com.vunetsystems.opentelemetry.android:android-agent:0.0.1-SNAPSHOT-dev` |
-| Instrumentation | `com.vunetsystems.opentelemetry.android.instrumentation:<artifact>:0.0.1-SNAPSHOT-dev` |
+| Role | Maven coordinate (snapshot) |
+|------|-----------------------------|
+| BOM | `com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT` |
+| Agent entry | `com.vunetsystems.opentelemetry.android:android-agent:0.0.1-SNAPSHOT` |
+| Instrumentation | `com.vunetsystems.opentelemetry.android.instrumentation:<artifact>:0.0.1-SNAPSHOT` |
 
-Repository: `https://maven.pkg.github.com/vunetsystems/opentelemetry-android`
+Releases use the same coordinates without `-SNAPSHOT` (e.g. `0.0.1`).
+
+Repository: [Maven Central](https://central.sonatype.com/artifact/com.vunetsystems.opentelemetry.android/android-agent)
 
 The [vuTelemetry-android](https://github.com/vunetsystems/vutelemetry-android) SDK and Gradle plugin
 should pin the same BOM version when building against this fork.
@@ -25,23 +26,27 @@ should pin the same BOM version when building against this fork.
 
 Configured in root `gradle.properties`:
 
-| Property | Value (dev line) | Effect |
-|----------|------------------|--------|
+| Property | Value | Effect |
+|----------|-------|--------|
 | `version` | `0.0.1` | Base semver |
-| `otel.version.suffix` | `dev` | Appends `-dev` after other suffixes |
 | `otel.publish.alpha` | `false` | Does **not** append `-alpha` (all modules share one version) |
 | `final` (Gradle property) | unset | Appends `-SNAPSHOT` |
 
-Default publish result: **`0.0.1-SNAPSHOT-dev`**.
+Default publish result: **`0.0.1-SNAPSHOT`**.
 
-Pinned (non-SNAPSHOT) dev build: publish with `-Pfinal=true` → **`0.0.1-dev`** for all modules.
+Release build: publish with `-Pfinal=true` → **`0.0.1`** for all modules.
 
-To re-enable upstream-style `-alpha` on non-stable modules: `-Potel.publish.alpha=true`.
+### CI publish triggers
 
-### Bumping the dev line
+| Branch event | Published version |
+|--------------|-------------------|
+| PR merged to `develop` | `0.0.1-SNAPSHOT` |
+| push to `release/*` | `0.0.1` (must be greater than latest on Central) |
+
+### Bumping versions
 
 1. Update `version` in `gradle.properties` (e.g. `0.0.2`).
-2. Publish to GitHub Packages (see [RELEASING.md](RELEASING.md)).
+2. Merge to `develop` for snapshots, or `release/*` for releases.
 3. Update the matching BOM version in vuTelemetry-android.
 
 ## Versioning scheme
@@ -57,9 +62,8 @@ a regular release.
 
 ## Snapshot builds
 
-Every commit to the `main` branch will cause a
-[snapshot build](https://central.sonatype.com/service/rest/repository/browse/maven-snapshots/io/opentelemetry/android/)
-to be published to Sonatype. Users may choose to build and test and file issues against SNAPSHOT
+Snapshot builds are published to Maven Central when PRs merge to `develop`.
+Users may choose to build and test and file issues against SNAPSHOT
 builds, but their use in production is strongly discouraged.
 
 ## Android ecosystem compatibility
