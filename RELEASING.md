@@ -1,137 +1,101 @@
 # Releasing
 
-This documents describes the manual steps required to publish a release to maven central.
+This fork publishes all artifacts to **Maven Central** under `com.vunetsystems.opentelemetry.android`.
 
-## Fork policy
+## Version lines
 
-For this fork, do not publish to Maven Central.
+| Type | Version example | Gradle flag | CI trigger |
+|------|-----------------|-------------|------------|
+| Snapshot | `0.0.1-SNAPSHOT` | default (no `-Pfinal=true`) | PR merged to `develop` |
+| Release | `0.0.1` | `-Pfinal=true` | push to `release/*` (e.g. after PR merge) |
 
-- Publish fork artifacts to GitHub Packages (`vunetsystems/opentelemetry-android`).
-- Use `-PpublishTarget=github` for all publication from this repository (default in `build.gradle.kts`).
-- Sonatype release flow in `.github/workflows/release.yml` is reserved for upstream and is blocked for forks.
+Configured in root [`gradle.properties`](gradle.properties):
 
-## Publishing to GitHub Packages (VuNet dev line)
+- `version=0.0.1` — base semver
+- `otel.publish.alpha=false` — all modules share one version (no per-module `-alpha` suffix)
 
-### Prerequisites
+## Prerequisites
 
-- `gradle.properties`: `version`, `otel.version.suffix=dev`, `otel.publish.alpha=false`
-- GitHub credentials with `packages:write` for `vunetsystems/opentelemetry-android`
-- Set in `local.properties` or environment:
-  - `gpr.user` / `GITHUB_ACTOR`
-  - `gpr.key` / `GITHUB_TOKEN`
+- Verified namespace `com.vunetsystems` on [central.sonatype.com](https://central.sonatype.com)
+- Central Portal user token: `SONATYPE_USER`, `SONATYPE_KEY`
+- GPG key on a public keyserver: `GPG_PRIVATE_KEY`, `GPG_PASSWORD`
+- `CI=true` for signing and sources/javadoc during publish
 
-### Local verification before publish
+Log in to the Central Portal UI with the **same account** used to generate the Sonatype token.
+
+Repository secrets for GitHub Actions: `SONATYPE_USER`, `SONATYPE_KEY`, `GPG_PRIVATE_KEY`, `GPG_PASSWORD`.
+
+## CI workflows
+
+| Workflow | Trigger | Publishes |
+|----------|---------|-----------|
+| [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | PR merged to `develop` | `0.0.1-SNAPSHOT` |
+| [Release](.github/workflows/release.yml) | push to `release/**` | `0.0.1` (with version bump check) |
+
+Manual fallback: both workflows support `workflow_dispatch`.
+
+## Local verification before publish
 
 ```bash
 ./gradlew spotlessApply
 ./gradlew check
 ./gradlew apiCheck
 
-# Optional: inspect local POM versions
-./gradlew publishToMavenLocal -PpublishTarget=github
+./gradlew :android-agent:properties -q | grep '^version:'
+# Expected: version: 0.0.1-SNAPSHOT
 ```
 
-Confirm modules report the same version, e.g. `0.0.1-SNAPSHOT-dev`:
+## Publish snapshot locally
 
 ```bash
-./gradlew :android-agent:properties :instrumentation:crash:properties -q | grep '^version:'
+export CI=true
+# SONATYPE_USER, SONATYPE_KEY, GPG_PRIVATE_KEY, GPG_PASSWORD
+
+./gradlew --stop
+./gradlew publishToSonatype --no-parallel --no-configuration-cache --no-build-cache
 ```
 
-### Publish all modules
+Do **not** run `closeAndReleaseSonatypeStagingRepository` for snapshots.
+
+## Publish release locally
 
 ```bash
-./gradlew publish -PpublishTarget=github
+export CI=true
+
+.github/scripts/verify-version-greater-than-central.sh
+
+./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository \
+  -Pfinal=true \
+  --no-parallel --no-configuration-cache --no-build-cache
 ```
 
-CI may also run `.github/workflows/publish-github-packages.yml` when a PR merges to `develop`.
+## Verify published artifacts
 
-### Troubleshooting publish failures
-
-| HTTP status | Meaning | Action |
-|-------------|---------|--------|
-| **401** | Bad or missing token | Regenerate a PAT with `write:packages` / `read:packages`; set `gpr.user` and `gpr.key` in `local.properties` |
-| **403** | Token lacks permission or repo access | Ensure the user can publish to `vunetsystems/opentelemetry-android` |
-| **402 Payment Required** | GitHub Packages storage/billing limit for the org | Org admin: [GitHub billing](https://github.com/settings/billing) → increase Packages quota or free storage; delete old package versions under **Packages** |
-
-If publish fails partway through, fix the org issue and re-run `./gradlew publish -PpublishTarget=github` (Gradle may skip unchanged artifacts).
-
-### Consumer BOM (vuTelemetry and apps)
-
-```kotlin
-dependencies {
-    api(platform("com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT-dev"))
-    implementation("com.vunetsystems.opentelemetry.android:android-agent")
-    // other artifacts without version — BOM aligns versions
-}
-```
-
-After each publish, record the BOM version and update vuTelemetry-android `vunet.stack.version` / OTel BOM pin to match.
-
-### Pinned QA build (optional)
-
-Non-SNAPSHOT artifacts for a fixed test stack:
+Snapshots (wait ~15–30 min):
 
 ```bash
-./gradlew publish -PpublishTarget=github -Pfinal=true
+curl -s "https://central.sonatype.com/repository/maven-snapshots/com/vunetsystems/opentelemetry/android/android-agent/maven-metadata.xml"
 ```
 
-Produces `0.0.1-dev` (no `-SNAPSHOT`) for all modules.
+Releases:
 
-## Release cadence
+```bash
+curl -s "https://repo1.maven.org/maven2/com/vunetsystems/opentelemetry/android/android-agent/maven-metadata.xml"
+```
 
-This repository roughly targets monthly minor releases from the `main` branch.
-These releases are generally cut on the Tuesday after the third Monday of the month, roughly a
-week after the monthly minor release of [opentelemetry-java-instrumentation](https://github.com/open-telemetry/opentelemetry-java-instrumentation).
+## Consumer coordinates
 
-## Update Milestones
+See [Maven Central consumption](./docs/MAVEN_CENTRAL.md).
 
-First, let's deal with any milestones:
+## Troubleshooting
 
-- Open [the list of active milestones](https://github.com/open-telemetry/opentelemetry-android/milestones)
-  to see if there is a milestone open for the version you are about to release.
-- If there is no milestone for this version, begin prepping the release (below)
-- If there is a milestone for this release:
-    - If there are no remaining issue or PRs associated with the milestone, you may close the
-      milestone and proceed to prepping the release (below).
-    - If there is active work remaining, you should probably stop the release.
-      Alternately, you could move the work to a future milestone, but probably want to discuss this
-      with other contributors first.
+| Error | Cause | Action |
+|-------|-------|--------|
+| **The version cannot be a SNAPSHOT** | Invalid version on staging upload | Use `0.0.1-SNAPSHOT` or `0.0.1` only; never `-SNAPSHOT-dev` |
+| **401 / 403** | Bad Sonatype token | Regenerate token; same account in UI and Gradle |
+| **Signing failed** | Missing `CI=true` or bad GPG env | Set `CI=true`; verify GPG vars |
+| **javaDocReleaseGeneration FAILED** | JVM metaspace exhaustion | Add `--no-parallel`; run `./gradlew --stop` first |
+| **Release version must be greater** | Duplicate or downgraded version | Bump `version` in `gradle.properties` |
+| **Deployments empty in portal** | Staging not closed (releases only) | Run `closeAndReleaseSonatypeStagingRepository` for releases |
 
-
-## Prepare the release
-
-Next, we need to prepare the release. This creates a versioned release branch, These are the steps to follow:
-
-- Review the recent [list of open PRs](https://github.com/open-telemetry/opentelemetry-android/pulls)
-  to determine if any need to be merged before cutting a release.
-- Make sure that the `gradle.properties` version property is set to the value you want to release.
-  This must be different than the most recent release number (typically one minor version increase).
-- Merge a pull request to `main` branch that updates the `CHANGELOG.md`.
-    - The heading for the unreleased entries must be `## Unreleased`.
-    - Use [this action](https://github.com/open-telemetry/opentelemetry-android/actions/workflows/draft-change-log-entries.yaml) as a starting point for writing the change log entries. It will print a draft in the console that you can copy to create your PR.
-- Go to the
-  [prepare-release-branch action](https://github.com/open-telemetry/opentelemetry-android/actions/workflows/prepare-release-branch.yml)
-  in Github and click on "Run workflow". This creates the release branch and does some prep.
-- After the workflow finishes, it will have created 2 PRs -- one against `main` branch and
-  one against the release branch. Review and merge these two PRs before running the release
-  job (below).
-
-## Run the release
-
-Ensure that the preparation PR (created above) has been first merged into the release branch.
-
-- The "prepare" step above should have created a PR that updates the version number in
-  `gradle.properties`. This PR must be approved and merged before the release workflow is started,
-  otherwise the release job will fail (the process explicitly checks for the version in the
-  CHANGELOG.md). Because the release workflow runs against a release branch, it is safe to
-  merge the `gradle.properties` into `main`.
-- Run the [Release workflow](https://github.com/open-telemetry/opentelemetry-android/actions/workflows/release.yml).
-  - Press the "Run workflow" button, then select the release branch from the dropdown list,
-    e.g. `release/v0.6.x`, and click the "Run workflow" button below that.
-  - This workflow will publish the artifacts to maven central and will publish a GitHub release.
-    The release will have release notes based on the CHANGELOG and will include `.zip` and
-    `.tar.gz` bundles of the source code.
-
-> Please note that the artifacts are published into maven central, which tends to have a delay of
-> roughly half an hour, more or less, before making the newly published artifacts actually available
-> for fetching them.
+Drop failed deployments at [central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments) before republishing.

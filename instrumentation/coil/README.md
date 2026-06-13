@@ -69,7 +69,7 @@ dependencies {
     implementation(libs.coil.compose)      // only if you use AsyncImage
 
     // OTel Coil instrumentation (pulled in transitively by the Vunet SDK, or add it directly):
-    implementation("com.vunetsystems.opentelemetry.android.instrumentation:coil:0.0.1-SNAPSHOT-dev")
+    implementation("com.vunetsystems.opentelemetry.android.instrumentation:coil:0.0.1-SNAPSHOT")
 }
 ```
 
