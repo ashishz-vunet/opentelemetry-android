@@ -19,6 +19,7 @@ import io.opentelemetry.sdk.common.Clock
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
 import io.opentelemetry.sdk.trace.data.SpanData
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -177,10 +178,13 @@ class ActivityTracerTest {
         assertEquals(2, spans.size)
 
         val appStartSpan = spans[0]
+        val innerSpan = spans[1]
         assertEquals(RumConstants.APP_START_SPAN_NAME, appStartSpan.name)
         assertEquals("cold", appStartSpan.attributes.get(RumConstants.START_TYPE_KEY))
+        val launchActivityName = innerSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY)
+        assertNotNull(launchActivityName)
+        assertEquals(launchActivityName, appStartSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY))
 
-        val innerSpan = spans[1]
         assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, innerSpan.name)
         assertEquals("Created", innerSpan.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
     }

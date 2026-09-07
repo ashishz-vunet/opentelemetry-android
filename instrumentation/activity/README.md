@@ -20,6 +20,10 @@ This instrumentation produces the following telemetry:
   reaches PostPaused, PostStopped, or PostDestroyed.
 * Attributes:
   * `app.start.type`: { `cold` | `hot` | `warm` }
+  * `activity.name`: launch activity simple class name, on every `app.start` (cold, warm, and hot)
+  * `last.screen.name`: **conditional** — previous visible screen, emitted only on
+    cross-screen re-entry (previous screen differs from the launch screen). Absent on cold
+    start and on same-screen hot.
 * Resource (trace export): the **first cold** `app.start` span includes the full OTLP resource block
   (`device.*`, `os.*`, `app.installation.id`, `service.*`, etc.). All other trace spans carry a
   minimal resource (`service.name` only). Logs and metrics always use the full resource.

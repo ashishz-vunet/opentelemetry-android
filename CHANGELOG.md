@@ -229,6 +229,8 @@
 
 ### Fixed
 
+- Cold `app.start` now carries `activity.name` (the launch activity's simple class name), matching
+  warm/hot. Previously it was set only on the child `activity.lifecycle` span.
 - OkHttp Byte Buddy advice classes (`OkHttpClientAdvice`, `OkHttpCallbackAdvice`) now ship in `okhttp3-library` so woven `OkHttpClient` bytecode resolves them at runtime (fixes `NoClassDefFoundError` on Android).
 - OkHttp client instrumentation logic moved to public `OkHttpSingletons.applyClientInstrumentation` so woven OkHttp bytecode does not invoke private advice helpers (fixes `IllegalAccessError` on Android).
 - Glide image loads that fail with a `null` model (e.g. `Glide.with(view).load(null)`) no longer drop the failure silently; a span is now synthesised with `image.url` and `image.model_type` set to `unknown`.
