@@ -49,7 +49,8 @@ internal class CurrentNetworkProviderTest {
         val networkRequest: NetworkRequest = mockk()
         val networkDetector: NetworkDetector = mockk()
         val connectivityManager: ConnectivityManager = mockk()
-        every { networkDetector.detectCurrentNetwork() } returns wifi andThen cellular
+        every { networkDetector.detectCurrentNetwork() } returns wifi
+        every { networkDetector.detectCurrentNetwork(fakeNet) } returns cellular
         every { connectivityManager.registerDefaultNetworkCallback(any()) } just Runs
         every { connectivityManager.unregisterNetworkCallback(any<NetworkCallback>()) } just Runs
 
@@ -78,10 +79,10 @@ internal class CurrentNetworkProviderTest {
                 assertThat(currentNetwork).isEqualTo(noNetwork)
             }
         }
-        // note: we ignore the network passed in and just rely on refreshing the network info when
-        // this is happens
         monitorSlot.captured.onAvailable(fakeNet)
         assertThat(notified.get()).isEqualTo(1L)
+
+        every { connectivityManager.activeNetwork } returns null
         monitorSlot.captured.onLost(fakeNet)
         assertThat(notified.get()).isEqualTo(2L)
 
@@ -97,7 +98,8 @@ internal class CurrentNetworkProviderTest {
         val networkRequest: NetworkRequest = mockk()
         val networkDetector: NetworkDetector = mockk()
         val connectivityManager: ConnectivityManager = mockk()
-        every { networkDetector.detectCurrentNetwork() } returns wifi andThen cellular
+        every { networkDetector.detectCurrentNetwork() } returns wifi
+        every { networkDetector.detectCurrentNetwork(fakeNet) } returns cellular
         every { connectivityManager.registerDefaultNetworkCallback(any()) } just Runs
         every { connectivityManager.unregisterNetworkCallback(any<NetworkCallback>()) } just Runs
 
@@ -166,5 +168,35 @@ internal class CurrentNetworkProviderTest {
         val networkProvider =
             CurrentNetworkProviderImpl(networkDetector, connectivityManager) { networkRequest }
         assertThat(networkProvider.refreshNetworkStatus()).isEqualTo(UNKNOWN_NETWORK)
+    }
+
+    @Test
+    fun `cold start on cellular recovers when activeNetwork is still null`() {
+        val networkDetector: NetworkDetector = mockk()
+        val connectivityManager: ConnectivityManager = mockk()
+        // cold start while the radio is still validating: the OS has no default network yet
+        every { networkDetector.detectCurrentNetwork() } returns noNetwork
+        every { networkDetector.detectCurrentNetwork(fakeNet) } returns cellular
+        every { connectivityManager.registerDefaultNetworkCallback(any()) } just Runs
+
+        val currentNetworkProvider =
+            CurrentNetworkProviderImpl(networkDetector, connectivityManager) { mockk() }
+
+        // never publish "unavailable" off the init snapshot alone
+        assertThat(currentNetworkProvider.currentNetwork).isEqualTo(UNKNOWN_NETWORK)
+
+        val monitorSlot = slot<NetworkCallback>()
+        verify {
+            connectivityManager.registerDefaultNetworkCallback(capture(monitorSlot))
+        }
+
+        // the callback must classify the Network it was handed, not re-query getActiveNetwork()
+        monitorSlot.captured.onAvailable(fakeNet)
+        assertThat(currentNetworkProvider.currentNetwork).isEqualTo(cellular)
+
+        // a stale onLost for a network that is no longer the default must not clobber it
+        every { connectivityManager.activeNetwork } returns fakeNet
+        monitorSlot.captured.onLost(mockk<Network>())
+        assertThat(currentNetworkProvider.currentNetwork).isEqualTo(cellular)
     }
 }

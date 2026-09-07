@@ -7,6 +7,7 @@ package io.opentelemetry.android.internal.services.network.detector
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.telephony.TelephonyManager
@@ -36,13 +37,17 @@ internal class NetworkDetectorImpl(
     private val carrierFinder = CarrierFinder(context, telephonyManager)
 
     override fun detectCurrentNetwork(): CurrentNetwork {
-        val network = connectivityManager.activeNetwork
-        if (network == null) {
-            return CurrentNetworkProvider.NO_NETWORK
-        }
+        val network = connectivityManager.activeNetwork ?: return CurrentNetworkProvider.NO_NETWORK
+        return detectCurrentNetwork(network)
+    }
 
-        val metered = connectivityManager.isActiveNetworkMetered
+    override fun detectCurrentNetwork(network: Network): CurrentNetwork {
         val capabilities = connectivityManager.getNetworkCapabilities(network)
+        // Derive metered from the network we were handed; isActiveNetworkMetered lies when this
+        // network is not (yet) the active one.
+        val metered =
+            capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)?.not()
+                ?: connectivityManager.isActiveNetworkMetered
 
         return when {
             capabilities == null -> {

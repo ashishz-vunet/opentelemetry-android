@@ -47,6 +47,12 @@ internal class CurrentNetworkProviderImpl(
 
     private fun startMonitoring(createNetworkMonitoringRequest: () -> NetworkRequest) {
         refreshNetworkStatus()
+        // A cold start can beat the radio: getActiveNetwork() stays null until the default
+        // network is VALIDATED. "unavailable" would be a lie that lands in dashboards as a real
+        // bucket, so stay "unknown" until a callback tells us otherwise.
+        if (currentNetwork == CurrentNetworkProvider.NO_NETWORK) {
+            currentNetwork = CurrentNetworkProvider.UNKNOWN_NETWORK
+        }
         try {
             registerNetworkCallbacks(createNetworkMonitoringRequest)
         } catch (e: Exception) {
@@ -113,24 +119,51 @@ internal class CurrentNetworkProviderImpl(
         }
     }
 
-    private inner class ConnectionMonitor : NetworkCallback() {
-        override fun onAvailable(network: Network) {
-            val activeNetwork = refreshNetworkStatus()
-            RumDiagnostics.d { "network: onAvailable state=${activeNetwork.state}" }
+    private fun detect(network: Network): CurrentNetwork =
+        try {
+            networkDetector.detectCurrentNetwork(network)
+        } catch (e: Exception) {
+            // guard against security issues/bugs when accessing the Android connectivityManager.
+            // see: https://issuetracker.google.com/issues/175055271
+            CurrentNetworkProvider.UNKNOWN_NETWORK
+        }
 
-            notifyListeners(activeNetwork)
+    private fun publish(network: CurrentNetwork) {
+        // onCapabilitiesChanged is chatty; don't wake listeners for a value that didn't move.
+        if (network == currentNetwork) return
+        currentNetwork = network
+        RumDiagnostics.d { "network: state=${network.state}" }
+
+        notifyListeners(network)
+    }
+
+    private inner class ConnectionMonitor : NetworkCallback() {
+        // Classify the Network we were handed rather than re-querying getActiveNetwork(), which
+        // is often still null at this point and would pin the cache to NO_NETWORK for good.
+        override fun onAvailable(network: Network) {
+            publish(detect(network))
+        }
+
+        override fun onCapabilitiesChanged(
+            network: Network,
+            networkCapabilities: NetworkCapabilities,
+        ) {
+            // onAvailable often fires before the network is VALIDATED and classifiable; this is
+            // where the real transport shows up, and Android will not re-fire onAvailable.
+            publish(detect(network))
         }
 
         override fun onLost(network: Network) {
-            // it seems that the "currentNetwork" is still the one that is being lost, so for
-            // this method, we'll force it to be NO_NETWORK, rather than relying on the
-            // ConnectivityManager to have the right
-            // state at the right time during this event.
-            val currentNetwork = CurrentNetworkProvider.NO_NETWORK
-            this@CurrentNetworkProviderImpl.currentNetwork = currentNetwork
-            RumDiagnostics.d { "network: onLost" }
-
-            notifyListeners(currentNetwork)
+            // The ConnectivityManager may still report the *lost* network as active here, so only
+            // trust a different default; otherwise assume we're offline.
+            val activeNetwork = connectivityManager.activeNetwork
+            publish(
+                if (activeNetwork != null && activeNetwork != network) {
+                    detect(activeNetwork)
+                } else {
+                    CurrentNetworkProvider.NO_NETWORK
+                },
+            )
         }
     }
 
