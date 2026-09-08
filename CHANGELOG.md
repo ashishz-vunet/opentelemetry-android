@@ -15,6 +15,48 @@
   Fragment) — one `device.app.lifecycle` span covers a transition regardless of how many
   Activities/Fragments are involved. Disable via `instrumentation { appLifecycle { enabled(false) } }`.
   iOS-side `ios.app.state` parity is out of scope for this change.
+
+- HTTP client spans now carry the decomposed URL alongside `url.full`: **`url.scheme`,
+  `url.path` and `url.query`**, on both the OkHttp and `HttpURLConnection` instrumentations.
+
+  Upstream's `HttpClientAttributesGetter` exposes only `getUrlFull()` — the per-part accessors
+  live on the *server*-side getter, so nothing in the client pipeline ever split the URL up.
+  That is easy to mistake for "these are server-only attributes"; they are not. They were the
+  only URL fields this SDK was not sending while the iOS and Flutter SDKs were, on the same
+  client HTTP signal.
+
+  Emission rules, shared by both instrumentations via
+  `io.opentelemetry.android.common.internal.http.UrlPartsAttributes` so they cannot drift:
+
+  | Attribute | Emitted |
+  |-----------|---------|
+  | `url.scheme` | when non-blank |
+  | `url.path` | always; `/` when the URL carries no path |
+  | `url.query` | only when present and non-empty — never as `""` |
+
+  `url.query` is omitted rather than blanked because the semantic conventions make it
+  conditionally required: an empty string asserts that a query was present and blank, which is a
+  different claim from there having been none. The `/` fallback for `url.path` matters because
+  `okhttp3.HttpUrl` and `java.net.URL` disagree about a host-only URL — okhttp reports `/`,
+  `java.net.URL` reports `""` — and without it the two instrumentations would describe the root
+  resource differently.
+
+  Values keep their percent-encoding, matching `url.full`, so the parts add up to the whole they
+  sit beside.
+
+  `url.query` is redacted with the same sanitizer and parameter set that upstream's
+  `HttpClientAttributesExtractor` already applies to `url.full` — the values of `AWSAccessKeyId`,
+  `Signature`, `sig` and `X-Goog-Signature` are replaced with `REDACTED`. Emitting the raw query
+  would have placed a plaintext signed-URL credential on the same span as the redacted copy, and
+  semconv requires sensitive query values to be scrubbed on `url.query` as well as `url.full`.
+  `url.scheme` and `url.path` need no equivalent: userinfo lives in the authority and the
+  sensitive parameters live in the query, so neither reaches them.
+
+  One gap remains, and it is upstream's: a consumer overriding the set via
+  `Experimental.setSensitiveQueryParameters` changes what `url.full` redacts, but that set is
+  write-only — there is no getter — so `url.query` is redacted against the default set regardless.
+  Nothing in this SDK calls that API today.
+
 - Navigation attribution: `ui.navigation` spans include three new attributes across all three
   navigators (View, Compose Nav2, Compose Nav3).
   - `navigation.is_initial` — `true` on the **first `ui.navigation` span emitted in the process**,
@@ -750,7 +792,6 @@ from release-to-release prior to v1.0.0.
   ([#591](https://github.com/open-telemetry/opentelemetry-android/pull/591))
 - start AppStart span when installing activity instrumentation
   ([#578](https://github.com/open-telemetry/opentelemetry-android/pull/578))
-
 
 ## Version 0.7.0 (2024-08-14)
 
