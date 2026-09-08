@@ -19,6 +19,8 @@ import io.opentelemetry.sdk.common.Clock
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
 import io.opentelemetry.sdk.trace.data.SpanData
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -177,13 +179,64 @@ class ActivityTracerTest {
         assertEquals(2, spans.size)
 
         val appStartSpan = spans[0]
+        val innerSpan = spans[1]
         assertEquals(RumConstants.APP_START_SPAN_NAME, appStartSpan.name)
         assertEquals("cold", appStartSpan.attributes.get(RumConstants.START_TYPE_KEY))
+        val launchActivityName = innerSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY)
+        assertNotNull(launchActivityName)
+        assertEquals(launchActivityName, appStartSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY))
 
-        val innerSpan = spans[1]
         assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, innerSpan.name)
         assertEquals("Created", innerSpan.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
     }
+
+    @Test
+    fun coldStart_activityName_namesTheLaunchActivity_notTheLast() {
+        // In BFSI apps a splash -> biometric -> main flow creates several activities before the
+        // first frame commits, which is why AppStartupTimer guards its own postCreatedFired with
+        // an AtomicBoolean. ActivityTracerCache builds one ActivityTracer per activity *class*,
+        // each with its own initialAppActivity (null) and its own ActiveSpan, so every one of them
+        // takes the cold branch and writes to the same startup span.
+        appStartupTimer.start(tracer, Clock.getDefault())
+
+        val launchActivity = mockk<SplashActivity>()
+        val secondActivity = mockk<BiometricActivity>()
+
+        fun tracerFor(activity: Activity) =
+            ActivityTracer(
+                activity = activity,
+                activeSpan = ActiveSpan(::noPreviousScreen),
+                tracer = tracer,
+                appStartupTimer = appStartupTimer,
+            )
+
+        // Both activities are created before anything ends the startup span. That is the real
+        // sequence: AppStartupTimer.end() returns early while the TTID draw listener is pending,
+        // so the span stays open past the second activity's creation.
+        val launchTracer = tracerFor(launchActivity)
+        val secondTracer = tracerFor(secondActivity)
+        launchTracer.startActivityCreation()
+        secondTracer.startActivityCreation()
+        launchTracer.endActiveSpan()
+        secondTracer.endActiveSpan()
+        appStartupTimer.end()
+
+        // Guard against a false pass: if both mocks resolved to the same simple name the
+        // assertion below would hold trivially.
+        assertNotEquals(launchActivity.javaClass.simpleName, secondActivity.javaClass.simpleName)
+
+        val appStartSpan = otelTesting.spans.first { it.name == RumConstants.APP_START_SPAN_NAME }
+        assertEquals(
+            launchActivity.javaClass.simpleName,
+            appStartSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY),
+        )
+    }
+
+    private fun noPreviousScreen(): String? = null
+
+    private open class SplashActivity : Activity()
+
+    private open class BiometricActivity : Activity()
 
     @Test
     fun addPreviousScreen_noPrevious() {

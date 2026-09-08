@@ -16,6 +16,7 @@ import io.opentelemetry.android.common.StartupTimestampProvider
 import java.util.ServiceLoader
 import io.opentelemetry.android.common.RumConstants
 import io.opentelemetry.android.common.RumDiagnostics
+import io.opentelemetry.android.instrumentation.activity.ActivityTracer
 import io.opentelemetry.android.internal.services.visiblescreen.activities.DefaultingActivityLifecycleCallbacks
 import android.view.ViewTreeObserver
 import io.opentelemetry.api.common.Attributes
@@ -53,6 +54,12 @@ internal class AppStartupTimer(
     // guards app.start.phase.first_activity so it fires only for the first activity;
     // in BFSI apps a second activity (biometric/splash) can fire before the first frame
     private val postCreatedFired = AtomicBoolean(false)
+
+    // guards activity.name for the same reason, and it needs its own flag: ActivityTracerCache
+    // builds one ActivityTracer per activity *class*, each with its own initialAppActivity (null)
+    // and its own ActiveSpan, so every one of them takes the cold-start branch. Without this the
+    // last activity created before the first frame would win.
+    private val launchActivityRecorded = AtomicBoolean(false)
 
     // true once a TTID OnDrawListener has been attached to the first activity's decorView;
     // used by end() to yield to the draw listener instead of ending the span prematurely
@@ -275,6 +282,19 @@ internal class AppStartupTimer(
                 ttidListenerAttached = true
             }
         }
+
+    /**
+     * Stamps [ActivityTracer.ACTIVITY_NAME_KEY] on the startup span for the **first** activity
+     * created during startup, ignoring every later one. A splash -> biometric -> main flow creates
+     * several activities before TTID commits the first frame, and the startup span stays open for
+     * all of them, so the write has to be one-shot to actually mean "launch activity".
+     */
+    fun recordLaunchActivity(activityName: String) {
+        if (!launchActivityRecorded.compareAndSet(false, true)) {
+            return
+        }
+        startupSpan?.setAttribute(ActivityTracer.ACTIVITY_NAME_KEY, activityName)
+    }
 
     /** Called when Activity is created.  */
     private fun startUiInit() {

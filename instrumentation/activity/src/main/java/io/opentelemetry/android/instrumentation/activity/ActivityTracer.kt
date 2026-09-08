@@ -57,6 +57,11 @@ internal class ActivityTracer(
         // the activity class name as the base of the span name.
         val isColdStart = initialAppActivity == null
         if (isColdStart) {
+            // Surface the launch activity on the app.start span itself, not only on the child
+            // activity.lifecycle span — catalog expects activity.name flat on app.start.
+            // One-shot inside AppStartupTimer: this branch runs once per activity *class*, so a
+            // direct write here would name the last activity created before the first frame.
+            appStartupTimer.recordLaunchActivity(activityName)
             return createLifecycleSpanWithParent("Created", appStartupTimer.startupSpan)
         }
         if (activityName == initialAppActivity) {
