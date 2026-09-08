@@ -67,6 +67,11 @@ class NetworkDetectorTest {
         every { connectivityManager.getNetworkCapabilities(network) } returns networkCapabilities
         every { connectivityManager.isActiveNetworkMetered } returns false
         every { networkCapabilities.hasTransport(any()) } returns false // default
+        // metered is derived from the capabilities of the network being classified, which is not
+        // necessarily the active one
+        every {
+            networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        } returns true
         every { telephonyManager.simOperatorName } returns "JibroCom" // default
 
         // Mock telephony feature as available by default
@@ -115,6 +120,9 @@ class NetworkDetectorTest {
     fun wifi_metered() {
         every { networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) } returns true
         every { connectivityManager.isActiveNetworkMetered } returns true
+        every {
+            networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        } returns false
 
         val networkDetector = NetworkDetector.create(context)
         val currentNetwork = networkDetector.detectCurrentNetwork()
@@ -138,6 +146,9 @@ class NetworkDetectorTest {
         val expectedCarrier = Carrier(310, "TestCarrier", "310", "260", "us")
 
         every { connectivityManager.isActiveNetworkMetered } returns true
+        every {
+            networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        } returns false
         val networkDetector = NetworkDetector.create(context)
         val currentNetwork = networkDetector.detectCurrentNetwork()
         assertThat(currentNetwork).isEqualTo(CurrentNetwork(NetworkState.TRANSPORT_CELLULAR, expectedCarrier, "LTE", metered = true))

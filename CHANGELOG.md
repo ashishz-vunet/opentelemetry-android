@@ -274,6 +274,18 @@
 - OkHttp Byte Buddy advice classes (`OkHttpClientAdvice`, `OkHttpCallbackAdvice`) now ship in `okhttp3-library` so woven `OkHttpClient` bytecode resolves them at runtime (fixes `NoClassDefFoundError` on Android).
 - OkHttp client instrumentation logic moved to public `OkHttpSingletons.applyClientInstrumentation` so woven OkHttp bytecode does not invoke private advice helpers (fixes `IllegalAccessError` on Android).
 - Glide image loads that fail with a `null` model (e.g. `Glide.with(view).load(null)`) no longer drop the failure silently; a span is now synthesised with `image.url` and `image.model_type` set to `unknown`.
+- `network.connection.type` no longer gets stuck at `unavailable` for the life of a process. The
+  cached `CurrentNetwork` is now classified from the `Network` the `NetworkCallback` was handed —
+  including a newly-handled `onCapabilitiesChanged` — instead of re-querying
+  `ConnectivityManager.getActiveNetwork()`, which is still `null` while a default network is being
+  validated. `onLost` no longer forces `NO_NETWORK` unconditionally, so a Wi-Fi <-> cellular handoff
+  can no longer clobber a live default. At init, a "no default network yet" snapshot is reported as
+  `unknown` rather than `unavailable` **when the system already knows of a network that is simply
+  not the default yet**, so a cold start that beats the radio is not mistaken for a genuinely
+  offline session — while a device with no networks at all still reports `unavailable`, which is
+  the only value an offline session will ever get, since callbacks are edge-triggered. `network.connection.metered` is now derived from the classified
+  network's capabilities rather than `isActiveNetworkMetered`, which reports `false` for a network
+  that is not active yet.
 
 ### ⚠️⚠️ Breaking changes
 
