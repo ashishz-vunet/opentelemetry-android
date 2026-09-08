@@ -177,6 +177,8 @@ internal class CurrentNetworkProviderTest {
         // cold start while the radio is still validating: the OS has no default network yet
         every { networkDetector.detectCurrentNetwork() } returns noNetwork
         every { networkDetector.detectCurrentNetwork(fakeNet) } returns cellular
+        // the radio is up but not yet the validated default — not the same as being offline
+        every { connectivityManager.allNetworks } returns arrayOf(fakeNet)
         every { connectivityManager.registerDefaultNetworkCallback(any()) } just Runs
 
         val currentNetworkProvider =
@@ -197,6 +199,52 @@ internal class CurrentNetworkProviderTest {
         // a stale onLost for a network that is no longer the default must not clobber it
         every { connectivityManager.activeNetwork } returns fakeNet
         monitorSlot.captured.onLost(mockk<Network>())
+        assertThat(currentNetworkProvider.currentNetwork).isEqualTo(cellular)
+    }
+
+    @Test
+    fun `genuinely offline start still reports unavailable, not unknown`() {
+        val networkDetector: NetworkDetector = mockk()
+        val connectivityManager: ConnectivityManager = mockk()
+        every { networkDetector.detectCurrentNetwork() } returns noNetwork
+        // no networks at all: this device is offline, not mid-validation
+        every { connectivityManager.allNetworks } returns emptyArray()
+        every { connectivityManager.registerDefaultNetworkCallback(any()) } just Runs
+
+        val currentNetworkProvider =
+            CurrentNetworkProviderImpl(networkDetector, connectivityManager) { mockk() }
+
+        // Callbacks are edge-triggered, so an offline session never gets one — this seed is the
+        // only value it will ever have and must not claim "unknown".
+        assertThat(currentNetworkProvider.currentNetwork).isEqualTo(noNetwork)
+    }
+
+    @Test
+    @Config(sdk = [Build.VERSION_CODES.M])
+    fun `pre-24 callback does not publish a non-default network`() {
+        val networkRequest: NetworkRequest = mockk()
+        val networkDetector: NetworkDetector = mockk()
+        val connectivityManager: ConnectivityManager = mockk()
+        val nonDefaultNet: Network = mockk()
+
+        // cellular is and stays the default; wifi merely comes up alongside it
+        every { networkDetector.detectCurrentNetwork() } returns cellular
+        every { networkDetector.detectCurrentNetwork(fakeNet) } returns cellular
+        every { networkDetector.detectCurrentNetwork(nonDefaultNet) } returns wifi
+        every { connectivityManager.activeNetwork } returns fakeNet
+        every { connectivityManager.registerNetworkCallback(any(), any<NetworkCallback>()) } just Runs
+
+        val currentNetworkProvider =
+            CurrentNetworkProviderImpl(networkDetector, connectivityManager) { networkRequest }
+
+        val monitorSlot = slot<NetworkCallback>()
+        verify {
+            connectivityManager.registerNetworkCallback(networkRequest, capture(monitorSlot))
+        }
+
+        // On API 23 the request matches every transport, so this fires for a network that is not
+        // the default. Classifying it directly would report wifi while cellular is still active.
+        monitorSlot.captured.onAvailable(nonDefaultNet)
         assertThat(currentNetworkProvider.currentNetwork).isEqualTo(cellular)
     }
 }
