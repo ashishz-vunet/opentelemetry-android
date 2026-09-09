@@ -6,6 +6,7 @@
 package io.opentelemetry.android.export
 
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.sdk.resources.Resource
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter
@@ -45,7 +46,14 @@ internal class SelectiveResourceSpanExporterTest {
         underTest.export(listOf(span))
 
         assertThat(delegate.finishedSpanItems).hasSize(1)
-        assertThat(delegate.finishedSpanItems[0].resource).isEqualTo(fullResource)
+        val exportedAttributes = delegate.finishedSpanItems[0].resource.attributes
+        // device/OS facts come back resource.-prefixed
+        assertThat(exportedAttributes.get(AttributeKey.stringKey("resource.device.model.name")))
+            .isEqualTo("Pixel")
+        assertThat(exportedAttributes.get(DeviceIncubatingAttributes.DEVICE_MODEL_NAME)).isNull()
+        // service.name stays canonical, unprefixed
+        assertThat(exportedAttributes.get(ServiceAttributes.SERVICE_NAME)).isEqualTo("test-app")
+        assertThat(exportedAttributes.get(AttributeKey.stringKey("resource.service.name"))).isNull()
     }
 
     @Test
@@ -93,7 +101,8 @@ internal class SelectiveResourceSpanExporterTest {
         underTest.export(listOf(cold, coldAgain))
 
         assertThat(delegate.finishedSpanItems).hasSize(2)
-        assertThat(delegate.finishedSpanItems[0].resource).isEqualTo(fullResource)
+        assertThat(delegate.finishedSpanItems[0].resource.attributes.get(AttributeKey.stringKey("resource.device.model.name")))
+            .isEqualTo("Pixel")
         assertThat(delegate.finishedSpanItems[1].resource).isEqualTo(minimalResource)
     }
 
