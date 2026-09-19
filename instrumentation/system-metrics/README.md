@@ -45,10 +45,10 @@ Data produced by this instrumentation uses instrumentation scope name
 > `system.memory.total` (total device RAM) and `system.disk.total` (total disk capacity) are
 > **not** in this table — they are static device facts, not per-sample metrics, so they moved to
 > the OTel resource (`AndroidResource.SYSTEM_MEMORY_TOTAL`/`SYSTEM_DISK_TOTAL`) and are read once
-> per process instead of on every `app.metrics` emission. Per the resource-export rules, they are
-> present on logs and metrics always, and on trace spans only via the first cold `app.start` span
-> — not on `app.metrics` or any other trace span. A query that derived used memory as
-> `1 - available/total` from a single `app.metrics` record must now join against the resource.
+> per process instead of on every `app.metrics` emission. They are present on the resource of every
+> trace, log and metric export, including the one carrying `app.metrics`, but not as `app.metrics`
+> span attributes. A query that derived used memory as `1 - available/total` must read `total` from
+> the resource.
 
 > `battery.percent` and `storage.free` reuse the attribute keys already defined in `RumConstants`
 > so they align with the crash instrumentation schema. `process.memory.heap.free` does not: the

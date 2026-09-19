@@ -137,9 +137,10 @@ object AndroidResource {
         }
 
     /**
-     * Minimal resource for trace spans. Device/OS/installation attrs are exported on the first
-     * cold `app.start` span only via [io.opentelemetry.android.export.SelectiveResourceSpanExporter].
+     * Resource holding only `service.name`. No longer used by the SDK: trace spans now carry the
+     * full resource on every export, like logs and metrics.
      */
+    @Deprecated("Trace spans carry the full resource; use createDefault(context).")
     @JvmStatic
     fun createMinimal(context: Context): Resource =
         Resource.builder().put(SERVICE_NAME, readAppName(context)).build()

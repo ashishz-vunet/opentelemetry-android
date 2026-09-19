@@ -241,6 +241,16 @@
 
 ### ⚠️⚠️ Breaking changes
 
+- **Trace spans now carry the full OTel resource on every export, and `app.start` no longer carries
+  `resource.*` attributes.** Previously spans used a minimal resource (`service.name` only) and the
+  device/OS/installation/SDK resource was attached solely to the first cold `app.start` per process,
+  with every key renamed `resource.<key>`. The tracer provider now uses the same resource as the
+  logger and meter providers, so every `resourceSpans` block carries the standard, unprefixed keys
+  (`device.model.name`, `os.version`, `app.installation.id`, `system.memory.total`,
+  `vunet.sdk.version`, …). Consumers reading `resource.*` off `app.start` must read the resource
+  instead; it is now present on every span, including `app.metrics`. `SelectiveResourceSpanExporter`
+  and `ResourceOverrideSpanData` (both `internal`) are removed; `AndroidResource.createMinimal` is
+  deprecated and unused. No `apiCheck` impact.
 - **`interaction.type` on `ui.interaction` now reports the semantic interaction, not the gesture.**
   A tap on a switch, checkbox, radio button or other toggle reports `toggle` where it previously
   reported `tap` (and `long_press` for a held press). Every other control is unchanged and still
@@ -292,7 +302,7 @@
   OTel resource — this is not a rename, and where you read them from is not symmetric with the
   rest of the resource.** They no longer appear anywhere on `app.metrics` (or any other trace
   span). Per the existing resource-export rules
-  (`io.opentelemetry.android.export.SelectiveResourceSpanExporter`, unchanged by this release):
+  (`io.opentelemetry.android.export.SelectiveResourceSpanExporter`, since removed — see above):
   logs and metrics always carry the full resource, so both keys are present there; traces carry
   the full resource only on the first cold `app.start` span per process, so that is the only trace
   span where they now appear. A consumer reading these two values from `app.metrics` must switch
