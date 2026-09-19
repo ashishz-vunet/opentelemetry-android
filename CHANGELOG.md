@@ -4,6 +4,16 @@
 
 ### Added
 
+- `device.anr` spans now carry **`exception.type = "ANR"`**. The attribute was absent entirely, so
+  every consumer had to either special-case ANR rows or substitute a value of its own — the
+  ingestion pipeline was defaulting it, which put the definition outside the SDK that produces the
+  signal. An ANR has no `Throwable`, so unlike `device.crash` (which reports the real
+  `throwable.javaClass.name`) there is nothing symbolic to derive; `ANR` is exactly the value the
+  pipeline already substituted, so nothing downstream changes while the span becomes
+  self-describing. Extractors registered via `addAttributesExtractor` still win on conflict, the
+  same in-process override already supported for `error.runtime`, so a Flutter/RN wrapper can report
+  its own taxonomy.
+
 - Hybrid-click date-picker capture: confirming a Material date picker now reports
   `interaction.type = date_picker` on the confirm-button span, plus `ui.control.value.selected_date`
   for a single date or `ui.control.value.start_date` / `.end_date` for a range. That tap already

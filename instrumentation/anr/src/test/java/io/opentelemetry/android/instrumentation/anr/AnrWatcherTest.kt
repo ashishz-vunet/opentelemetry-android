@@ -11,6 +11,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.trace.Span
@@ -57,6 +58,55 @@ class AnrWatcherTest {
         }
 
         assertThat(captured.captured.get(AttributeKey.stringKey("error.runtime"))).isEqualTo("jvm")
+    }
+
+    /**
+     * Pins the wire key and its value as string literals rather than through
+     * [ANR_EXCEPTION_TYPE], so renaming the constant or changing what it holds fails here instead
+     * of silently changing what dashboards group on.
+     *
+     * An ANR has no `Throwable`, so there is no symbolic type to derive; `device.crash` reports
+     * `throwable.javaClass.name` and has nothing to share with this path. Before this the attribute
+     * was absent and the ingestion pipeline substituted exactly this value.
+     */
+    @Test
+    fun anr_span_carries_exception_type() {
+        val captured = slot<Attributes>()
+        every { spanBuilder.setAllAttributes(capture(captured)) } returns spanBuilder
+        val anrWatcher = AnrWatcher(handler, mainThread, tracer, emptyList(), 1)
+        every { handler.post(any()) } returns true
+
+        for (i in 0..4) {
+            anrWatcher.run()
+        }
+
+        assertThat(captured.captured.get(AttributeKey.stringKey("exception.type"))).isEqualTo("ANR")
+        // The stack trace is the other half of an actionable ANR row and must survive alongside it.
+        assertThat(captured.captured.get(AttributeKey.stringKey("exception.stacktrace"))).isNotNull()
+    }
+
+    /**
+     * Extractors run after the built-in attributes and win on conflict, which is the supported
+     * in-process override for a wrapper reporting its own taxonomy. Documented for `error.runtime`
+     * already; this pins that `exception.type` behaves the same way rather than being special.
+     */
+    @Test
+    fun an_extractor_can_override_the_default_exception_type() {
+        val captured = slot<Attributes>()
+        every { spanBuilder.setAllAttributes(capture(captured)) } returns spanBuilder
+        val overriding =
+            EventAttributesExtractor<Array<StackTraceElement>> { _, _ ->
+                Attributes.of(AttributeKey.stringKey("exception.type"), "ApplicationNotResponding")
+            }
+        val anrWatcher = AnrWatcher(handler, mainThread, tracer, listOf(overriding), 1)
+        every { handler.post(any()) } returns true
+
+        for (i in 0..4) {
+            anrWatcher.run()
+        }
+
+        assertThat(captured.captured.get(AttributeKey.stringKey("exception.type")))
+            .isEqualTo("ApplicationNotResponding")
     }
 
     @Test

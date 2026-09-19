@@ -14,6 +14,7 @@ import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.context.Context
 import io.opentelemetry.semconv.ExceptionAttributes.EXCEPTION_STACKTRACE
+import io.opentelemetry.semconv.ExceptionAttributes.EXCEPTION_TYPE
 import io.opentelemetry.semconv.incubating.ThreadIncubatingAttributes.THREAD_ID
 import io.opentelemetry.semconv.incubating.ThreadIncubatingAttributes.THREAD_NAME
 import java.util.concurrent.CountDownLatch
@@ -22,6 +23,19 @@ import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 
 internal val DEFAULT_POLL_DURATION_NS = SECONDS.toNanos(1)
+
+/**
+ * Value reported as `exception.type` on a `device.anr` span.
+ *
+ * An ANR has no `Throwable`, so unlike `device.crash` -- which reports the real
+ * `throwable.javaClass.name` -- there is no symbolic type to read off anything. Without this the
+ * attribute was absent entirely and every consumer had to special-case ANR rows or substitute a
+ * value of its own, which is what the ingestion pipeline was doing. `"ANR"` is exactly the value it
+ * substituted, so moving the decision into the SDK changes nothing downstream while making the span
+ * self-describing.
+ */
+internal const val ANR_EXCEPTION_TYPE = "ANR"
+
 
 /**
  * Class that watches the ui thread for ANRs by posting
@@ -86,6 +100,7 @@ internal class AnrWatcher(
                 .put(THREAD_ID, id)
                 .put(THREAD_NAME, mainThread.name)
                 .put(EXCEPTION_STACKTRACE, stackTraceToString(stackTrace))
+                .put(EXCEPTION_TYPE, ANR_EXCEPTION_TYPE)
 
         // Extractors run after this write and may replace error.runtime; that is the
         // supported in-process override for a wrapper that still goes through this reporter.
