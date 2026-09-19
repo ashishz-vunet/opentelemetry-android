@@ -24,9 +24,9 @@ This instrumentation produces the following telemetry:
   * `last.screen.name`: **conditional** — previous visible screen, emitted only on
     cross-screen re-entry (previous screen differs from the launch screen). Absent on cold
     start and on same-screen hot.
-* Resource (trace export): the **first cold** `app.start` span includes the full OTLP resource block
-  (`device.*`, `os.*`, `app.installation.id`, `service.*`, etc.). All other trace spans carry a
-  minimal resource (`service.name` only). Logs and metrics always use the full resource.
+* Resource: every trace, log and metric export carries the full OTLP resource block
+  (`device.*`, `os.*`, `app.installation.id`, `service.*`, etc.); `app.start` carries no
+  `resource.*` span attributes.
 * Span events (cold start): `app.start.phase.process`,
   `app.start.phase.attach_base_context.start` / `.end` (require
   [startup-agent](../startup/README.md) and a declared `attachBaseContext` override on your

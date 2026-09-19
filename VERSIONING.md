@@ -65,8 +65,7 @@ contribute the following **resource** attributes via the existing `resource { }`
 | `vunet.gradle.plugin.version` | `vunet.telemetry.android` Gradle plugin version |
 | `vunet.sdk.version` | vuTelemetry SDK artifact version |
 
-These attributes flow to logs and metrics on every export, and to the first cold `app.start`
-trace span via `SelectiveResourceSpanExporter`.
+These attributes flow to traces, logs and metrics on every export as part of the OTel resource.
 
 #### vuTelemetry-android implementation contract
 

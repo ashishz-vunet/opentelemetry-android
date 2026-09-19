@@ -174,6 +174,7 @@ internal class AndroidResourceTest {
     // real Robolectric context; the mocked Context here cannot drive the real reader.
 
     @Test
+    @Suppress("DEPRECATION")
     fun testMinimalResource() {
         val minimal = AndroidResource.createMinimal(ctx)
         val expected =
