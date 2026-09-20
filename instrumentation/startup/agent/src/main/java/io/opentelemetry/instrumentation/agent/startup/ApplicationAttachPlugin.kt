@@ -69,26 +69,42 @@ internal class ApplicationAttachPlugin : Plugin {
         matcher: ElementMatcher<MethodDescription>,
         advice: Class<*>,
         override: OverrideSpec,
-    ): DynamicType.Builder<*> =
-        when {
-            typeDescription.declaredMethods.any { matcher.matches(it) } ->
-                builder.visit(Advice.to(advice).on(matcher))
-            inheritsFinal(typeDescription, matcher) -> builder
-            // The Android Gradle plugin transforms in decorate mode, which rejects method
-            // definition/interception; only visitors are allowed, so the override is written in ASM.
-            else -> builder.visit(InjectAdvisedOverride(override, Type.getInternalName(advice)))
+    ): DynamicType.Builder<*> {
+        if (typeDescription.declaredMethods.any { matcher.matches(it) }) {
+            return builder.visit(Advice.to(advice).on(matcher))
         }
+        val inherited = inheritedMethod(typeDescription, matcher)
+        if (inherited?.isFinal == true) {
+            return builder
+        }
+        // Copy the inherited visibility so a public parent override is not narrowed to
+        // protected (illegal, and ART rejects the class at load).
+        val access =
+            inherited
+                ?.modifiers
+                ?.and(Opcodes.ACC_PUBLIC or Opcodes.ACC_PROTECTED or Opcodes.ACC_PRIVATE)
+                ?.takeIf { it != 0 }
+                ?: override.access
+        // The Android Gradle plugin transforms in decorate mode, which rejects method
+        // definition/interception; only visitors are allowed, so the override is written in ASM.
+        return builder.visit(
+            InjectAdvisedOverride(
+                OverrideSpec(override.name, override.descriptor, access, override.argCount),
+                Type.getInternalName(advice),
+            ),
+        )
+    }
 
-    private fun inheritsFinal(
+    private fun inheritedMethod(
         typeDescription: TypeDescription,
         matcher: ElementMatcher<MethodDescription>,
-    ): Boolean {
+    ): MethodDescription? {
         var current = typeDescription.superClass?.asErasure()
         while (current != null) {
-            current.declaredMethods.firstOrNull { matcher.matches(it) }?.let { return it.isFinal }
+            current.declaredMethods.firstOrNull { matcher.matches(it) }?.let { return it }
             current = current.superClass?.asErasure()
         }
-        return false
+        return null
     }
 
     /** `void <name>(<one Context arg or none>)` override to inject into the app's Application. */

@@ -7,9 +7,13 @@ package io.opentelemetry.instrumentation.agent.startup
 
 import android.app.Application
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.lang.reflect.InvocationTargetException
 import net.bytebuddy.ByteBuddy
 import net.bytebuddy.description.type.TypeDescription
 import net.bytebuddy.dynamic.ClassFileLocator
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy
 import net.bytebuddy.jar.asm.ClassReader
 import net.bytebuddy.jar.asm.ClassVisitor
 import net.bytebuddy.jar.asm.MethodVisitor
@@ -17,10 +21,23 @@ import net.bytebuddy.jar.asm.Opcodes
 import net.bytebuddy.jar.asm.Type
 import net.bytebuddy.utility.OpenedClassReader
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [29])
 class ApplicationAttachPluginTest {
     private val plugin = ApplicationAttachPlugin()
+
+    @Before
+    fun resetTimestamps() {
+        setTimestamp("attachBaseContextStartElapsedRealtime", 0L)
+        setTimestamp("attachBaseContextEndElapsedRealtime", 0L)
+        setTimestamp("applicationOnCreateStartElapsedRealtime", 0L)
+        setTimestamp("applicationOnCreateEndElapsedRealtime", 0L)
+    }
 
     @Test
     fun `matches concrete Application subclasses`() {
@@ -91,6 +108,33 @@ class ApplicationAttachPluginTest {
         assertThat(names).contains("attachBaseContext")
     }
 
+    @Test
+    fun `injected override keeps a public parent attachBaseContext public`() {
+        val transformed = transform(TestChildOfPublicAttach::class.java)
+
+        val access = methodAccess(transformed.bytes, "attachBaseContext")
+        assertThat(access and Opcodes.ACC_PUBLIC).isNotZero()
+        assertThat(access and Opcodes.ACC_PROTECTED).isZero()
+    }
+
+    @Test
+    fun `injected onCreate and attachBaseContext record timestamps when invoked`() {
+        val loaded = loadTransformed(TestApplication::class.java)
+        val ctor = loaded.getDeclaredConstructor()
+        ctor.isAccessible = true
+        val instance = ctor.newInstance() as Application
+
+        invokeDeclared(loaded, instance, "attachBaseContext", Context::class.java, ApplicationProvider.getApplicationContext())
+        assertThat(timestamp("attachBaseContextStartElapsedRealtime")).isGreaterThan(0L)
+        assertThat(timestamp("attachBaseContextEndElapsedRealtime"))
+            .isGreaterThanOrEqualTo(timestamp("attachBaseContextStartElapsedRealtime"))
+
+        invokeDeclared(loaded, instance, "onCreate")
+        assertThat(timestamp("applicationOnCreateStartElapsedRealtime")).isGreaterThan(0L)
+        assertThat(timestamp("applicationOnCreateEndElapsedRealtime"))
+            .isGreaterThanOrEqualTo(timestamp("applicationOnCreateStartElapsedRealtime"))
+    }
+
     /** Owners of `invokespecial <methodName>` instructions inside the class's own `<methodName>`. */
     private fun invokeSpecialOwners(
         bytes: ByteArray,
@@ -124,6 +168,67 @@ class ApplicationAttachPluginTest {
         )
         return owners
     }
+
+    private fun loadTransformed(type: Class<*>): Class<*> =
+        transform(type)
+            .load(type.classLoader, ClassLoadingStrategy.Default.CHILD_FIRST)
+            .loaded
+
+    private fun invokeDeclared(
+        type: Class<*>,
+        instance: Any,
+        name: String,
+        parameterType: Class<*>? = null,
+        argument: Any? = null,
+    ) {
+        val method =
+            if (parameterType == null) {
+                type.getDeclaredMethod(name)
+            } else {
+                type.getDeclaredMethod(name, parameterType)
+            }
+        method.isAccessible = true
+        try {
+            if (parameterType == null) method.invoke(instance) else method.invoke(instance, argument)
+        } catch (e: InvocationTargetException) {
+            throw e.targetException
+        }
+    }
+
+    private fun methodAccess(
+        bytes: ByteArray,
+        methodName: String,
+    ): Int {
+        var access = 0
+        ClassReader(bytes).accept(
+            object : ClassVisitor(OpenedClassReader.ASM_API) {
+                override fun visitMethod(
+                    acc: Int,
+                    name: String,
+                    descriptor: String?,
+                    signature: String?,
+                    exceptions: Array<out String>?,
+                ): MethodVisitor? {
+                    if (name == methodName) access = acc
+                    return null
+                }
+            },
+            ClassReader.SKIP_CODE,
+        )
+        return access
+    }
+
+    private fun timestamp(field: String): Long = timestampsClass().getField(field).getLong(null)
+
+    private fun setTimestamp(
+        field: String,
+        value: Long,
+    ) {
+        timestampsClass().getField(field).setLong(null, value)
+    }
+
+    private fun timestampsClass(): Class<*> =
+        Class.forName("io.opentelemetry.android.instrumentation.startup.ProcessStartTimestamps")
 
     /** Method names as written in the class file; the unloaded type description does not list injected ones. */
     private fun declaredMethodNames(bytes: ByteArray): List<String> {
@@ -175,4 +280,12 @@ class ApplicationAttachPluginTest {
             super.attachBaseContext(base)
         }
     }
+
+    private open class TestPublicAttachApplication : Application() {
+        public override fun attachBaseContext(base: Context) {
+            super.attachBaseContext(base)
+        }
+    }
+
+    private class TestChildOfPublicAttach : TestPublicAttachApplication()
 }
