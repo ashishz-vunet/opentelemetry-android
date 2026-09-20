@@ -53,6 +53,8 @@ public final class io/opentelemetry/android/common/RumDiagnostics {
 }
 
 public abstract interface class io/opentelemetry/android/common/StartupTimestampProvider {
+	public fun getApplicationOnCreateEndElapsedRealtime ()J
+	public fun getApplicationOnCreateStartElapsedRealtime ()J
 	public abstract fun getAttachBaseContextEndElapsedRealtime ()J
 	public abstract fun getAttachBaseContextStartElapsedRealtime ()J
 	public abstract fun getContentProviderEpochMs ()J

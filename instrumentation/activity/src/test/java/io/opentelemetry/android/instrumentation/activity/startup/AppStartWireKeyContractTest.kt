@@ -48,6 +48,8 @@ class AppStartWireKeyContractTest {
             .isEqualTo("app.start.phase.attach_base_context.start")
         assertThat(AppStartupTimer.EVENT_CONTENT_PROVIDERS_START)
             .isEqualTo("app.start.phase.content_providers.start")
+        assertThat(AppStartupTimer.EVENT_APPLICATION_START).isEqualTo("app.start.phase.application.start")
+        assertThat(AppStartupTimer.EVENT_APPLICATION_END).isEqualTo("app.start.phase.application.end")
     }
 
     /**
@@ -62,6 +64,7 @@ class AppStartWireKeyContractTest {
             listOf(
                 AppStartupTimer.EVENT_ATTACH_BASE_CONTEXT_START to AppStartupTimer.EVENT_ATTACH_BASE_CONTEXT_END,
                 AppStartupTimer.EVENT_CONTENT_PROVIDERS_START to AppStartupTimer.EVENT_CONTENT_PROVIDERS_END,
+                AppStartupTimer.EVENT_APPLICATION_START to AppStartupTimer.EVENT_APPLICATION_END,
             )
 
         for ((start, end) in pairs) {
@@ -101,6 +104,8 @@ class AppStartWireKeyContractTest {
                 AppStartupTimer.EVENT_ATTACH_BASE_CONTEXT_END,
                 AppStartupTimer.EVENT_CONTENT_PROVIDERS_START,
                 AppStartupTimer.EVENT_CONTENT_PROVIDERS_END,
+                AppStartupTimer.EVENT_APPLICATION_START,
+                AppStartupTimer.EVENT_APPLICATION_END,
                 AppStartupTimer.EVENT_APPLICATION_CREATED,
                 AppStartupTimer.EVENT_APPLICATION_POST_CREATED,
                 AppStartupTimer.EVENT_TTID,

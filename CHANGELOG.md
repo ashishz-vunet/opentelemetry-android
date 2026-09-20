@@ -48,6 +48,18 @@
 
 ### Added
 
+- **`app.start.phase.application.start` / `.end` around `Application.onCreate()`** on the cold
+  `app.start` span. The gap between `content_providers.end` and `first_activity` was a black box;
+  it is mostly `onCreate` (DI graphs, SDK init that is not a ContentProvider), the phase startup
+  work targets. Timed by the startup-agent weave, emitted when the span ends so both timestamps
+  are known whether the SDK starts from a ContentProvider or inside `onCreate`. Verified on an
+  API 37 emulator: a 300 ms `Thread.sleep` in `onCreate` reads as 304 ms between the two events.
+  `StartupTimestampProvider` gains two defaulted properties (non-breaking).
+- **`app.start.phase.attach_base_context.start` / `.end` are now emitted for every app with an
+  `Application` subclass**, not only apps that declare `attachBaseContext`. Byte Buddy's decoration
+  mode cannot hook an inherited method, so the startup agent now injects a pass-through override
+  (advice around `super`) when the method is not declared; the same applies to `onCreate`.
+  Previously these events were effectively never on the wire (2 spans in ~31 000 messages).
 - `device.anr` spans now carry **`exception.type = "ANR"`**. The attribute was absent entirely, so
   every consumer had to either special-case ANR rows or substitute a value of its own — the
   ingestion pipeline was defaulting it, which put the definition outside the SDK that produces the

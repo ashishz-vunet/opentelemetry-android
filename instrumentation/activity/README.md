@@ -28,16 +28,18 @@ This instrumentation produces the following telemetry:
   (`device.*`, `os.*`, `app.installation.id`, `service.*`, etc.); `app.start` carries no
   `resource.*` span attributes.
 * Span events (cold start): `app.start.phase.process`,
-  `app.start.phase.attach_base_context.start` / `.end` (require
-  [startup-agent](../startup/README.md) and a declared `attachBaseContext` override on your
-  `Application` subclass), `app.start.phase.content_providers.start` / `.end`,
-  `app.start.phase.sdk_init`, `app.start.phase.first_activity`,
-  `app.start.phase.initial_display`
+  `app.start.phase.attach_base_context.start` / `.end`,
+  `app.start.phase.content_providers.start` / `.end`, `app.start.phase.sdk_init`,
+  `app.start.phase.application.start` / `.end`, `app.start.phase.first_activity`,
+  `app.start.phase.initial_display`. The `attach_base_context` and `application` pairs require
+  [startup-agent](../startup/README.md) and an `Application` subclass (no override needed).
 
   Each name describes the probe it is taken from, not a generic phase:
   * `attach_base_context.end` — the first `Application` callback completing. The ART runtime is
     already running well before this, so it is not a runtime-init marker.
   * `content_providers.end` — end of the ContentProvider init phase.
+  * `application.start` / `.end` — entry and exit of `Application.onCreate()`, the phase most
+    startup optimisation targets (DI graphs, non-ContentProvider SDK init).
   * `sdk_init` — the OTel SDK finished initialising, partway through `Application.onCreate()`.
     Not the end of that callback.
   * `first_activity` — the first `onActivityPreCreated`. It fires *before* `Activity.onCreate`,

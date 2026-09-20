@@ -72,6 +72,9 @@ internal class AppStartupTimer(
     // guards ContentProvider end events so they are recorded once when the timestamp becomes available
     private var contentProviderEndEventsRecorded = false
 
+    // guards Application.onCreate events so they are recorded once
+    private var applicationOnCreateEventsRecorded = false
+
     fun start(
         tracer: Tracer,
         clock: Clock,
@@ -190,6 +193,39 @@ internal class AppStartupTimer(
             endNanos,
             TimeUnit.NANOSECONDS,
         )
+    }
+
+    /**
+     * Records [EVENT_APPLICATION_START] / [EVENT_APPLICATION_END] around [android.app.Application.onCreate].
+     * Called at span end rather than at [start]: with ContentProvider auto-init the SDK starts before
+     * `onCreate` runs, and with manual init it starts inside it, so only by the end of startup are
+     * both timestamps known in every setup. No-ops when the startup-agent weave is absent.
+     */
+    private fun recordApplicationOnCreateEvents(appStart: Span) {
+        if (applicationOnCreateEventsRecorded) {
+            return
+        }
+        val startElapsed = startupTimestamps?.applicationOnCreateStartElapsedRealtime ?: 0L
+        val endElapsed = startupTimestamps?.applicationOnCreateEndElapsedRealtime ?: 0L
+        if (startElapsed <= 0L || endElapsed < startElapsed) {
+            return
+        }
+        val clockNowNanos = startupClock.now()
+        val startNanos = elapsedRealtimeToClockNanos(startElapsed, clockNowNanos)
+        val endNanos = elapsedRealtimeToClockNanos(endElapsed, clockNowNanos)
+        appStart.addEvent(
+            EVENT_APPLICATION_START,
+            Attributes.empty(),
+            startNanos,
+            TimeUnit.NANOSECONDS,
+        )
+        appStart.addEvent(
+            EVENT_APPLICATION_END,
+            Attributes.empty(),
+            endNanos,
+            TimeUnit.NANOSECONDS,
+        )
+        applicationOnCreateEventsRecorded = true
     }
 
     /**
@@ -326,6 +362,7 @@ internal class AppStartupTimer(
         val overallAppStartSpan = this.startupSpan
         if (overallAppStartSpan != null && !uiInitTooLate) {
             recordContentProviderEndEvents(overallAppStartSpan)
+            recordApplicationOnCreateEvents(overallAppStartSpan)
             overallAppStartSpan.end(startupClock.now(), TimeUnit.NANOSECONDS)
         }
         clear()
@@ -334,6 +371,7 @@ internal class AppStartupTimer(
     private fun clear() {
         this.startupSpan = null
         contentProviderEndEventsRecorded = false
+        applicationOnCreateEventsRecorded = false
     }
 
     companion object {
@@ -341,8 +379,9 @@ internal class AppStartupTimer(
         internal const val EVENT_PROCESS_CREATION = "app.start.phase.process"
 
         /**
-         * Milestone: start of [android.app.Application.attachBaseContext]. Requires startup-agent
-         * weave and a declared override on the app's [android.app.Application] subclass.
+         * Milestone: start of [android.app.Application.attachBaseContext]. Requires the
+         * startup-agent weave, which injects an override when the app's Application does not
+         * declare one.
          *
          * Shares the `app.start.phase.attach_base_context` prefix with
          * [EVENT_ATTACH_BASE_CONTEXT_END] so a duration query can pair the two by stripping
@@ -351,8 +390,8 @@ internal class AppStartupTimer(
         internal const val EVENT_ATTACH_BASE_CONTEXT_START = "app.start.phase.attach_base_context.start"
 
         /**
-         * Milestone: end of [android.app.Application.attachBaseContext]. Requires startup-agent
-         * weave and a declared override on the app's [android.app.Application] subclass.
+         * Milestone: end of [android.app.Application.attachBaseContext]. Requires the
+         * startup-agent weave (see [EVENT_ATTACH_BASE_CONTEXT_START]).
          *
          * Named for the probe rather than for a runtime-init phase: the ART runtime is already
          * running well before `attachBaseContext`, so this marks the first `Application` callback
@@ -375,6 +414,18 @@ internal class AppStartupTimer(
          * Present only when the startup artifact is on the classpath.
          */
         internal const val EVENT_CONTENT_PROVIDERS_END = "app.start.phase.content_providers.end"
+
+        /**
+         * Milestone: entry to [android.app.Application.onCreate]. Requires the startup-agent weave,
+         * which injects an `onCreate` override when the app's Application does not declare one.
+         *
+         * Shares the `app.start.phase.application` prefix with [EVENT_APPLICATION_END] so the
+         * pair yields the `onCreate` duration.
+         */
+        internal const val EVENT_APPLICATION_START = "app.start.phase.application.start"
+
+        /** Milestone: exit from [android.app.Application.onCreate]. See [EVENT_APPLICATION_START]. */
+        internal const val EVENT_APPLICATION_END = "app.start.phase.application.end"
 
         /**
          * Milestone: OTel SDK initialisation complete; all of [android.app.Application.onCreate]

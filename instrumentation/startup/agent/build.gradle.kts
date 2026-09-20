@@ -13,4 +13,5 @@ dependencies {
     implementation(project(":instrumentation:startup:library"))
     implementation(libs.byteBuddy)
     testImplementation(project(":test-common"))
+    testImplementation(libs.robolectric)
 }

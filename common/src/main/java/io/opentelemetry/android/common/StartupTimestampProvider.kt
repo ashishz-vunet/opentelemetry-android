@@ -27,6 +27,19 @@ interface StartupTimestampProvider {
     val attachBaseContextEndElapsedRealtime: Long
 
     /**
+     * [android.os.SystemClock.elapsedRealtime] at entry to the first
+     * [android.app.Application.onCreate] invocation. Set by startup-agent weave; 0 when absent.
+     * Defaulted so existing implementations keep compiling.
+     */
+    val applicationOnCreateStartElapsedRealtime: Long get() = 0L
+
+    /**
+     * [android.os.SystemClock.elapsedRealtime] at exit from [android.app.Application.onCreate].
+     * Set by startup-agent weave; 0 when absent.
+     */
+    val applicationOnCreateEndElapsedRealtime: Long get() = 0L
+
+    /**
      * Wall-clock epoch ms at the start of the ContentProvider initialization phase.
      * Set by [io.opentelemetry.android.instrumentation.startup.AppAnchorContentProvider].
      */

@@ -16,6 +16,10 @@ internal class StartupTimestampProviderImpl : StartupTimestampProvider {
     override val attachBaseContextEndElapsedRealtime: Long
         get() = ProcessStartTimestamps.attachBaseContextEndElapsedRealtime
 
+    override val applicationOnCreateStartElapsedRealtime: Long
+        get() = ProcessStartTimestamps.applicationOnCreateStartElapsedRealtime
+    override val applicationOnCreateEndElapsedRealtime: Long
+        get() = ProcessStartTimestamps.applicationOnCreateEndElapsedRealtime
     override val contentProvidersPhaseStartEpochMs: Long
         get() = ProcessStartTimestamps.contentProvidersPhaseStartEpochMs
 
