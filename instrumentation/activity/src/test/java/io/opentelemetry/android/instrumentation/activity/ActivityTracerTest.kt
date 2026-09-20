@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.impl.annotations.RelaxedMockK
 import io.mockk.junit5.MockKExtension
 import io.mockk.mockk
+import io.opentelemetry.api.trace.Span
 import io.opentelemetry.android.common.RumConstants
 import io.opentelemetry.android.instrumentation.activity.startup.AppStartupTimer
 import io.opentelemetry.android.instrumentation.common.ActiveSpan
@@ -19,9 +20,11 @@ import io.opentelemetry.sdk.common.Clock
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
 import io.opentelemetry.sdk.trace.data.SpanData
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -30,6 +33,8 @@ import org.junit.jupiter.api.extension.RegisterExtension
 @ExtendWith(MockKExtension::class)
 class ActivityTracerTest {
     private companion object {
+        const val TTID = "app.start.phase.initial_display"
+
         @RegisterExtension
         val otelTesting: OpenTelemetryExtension = OpenTelemetryExtension.create()
     }
@@ -160,6 +165,191 @@ class ActivityTracerTest {
         assertEquals(RumConstants.APP_START_SPAN_NAME, span.name)
         assertEquals("warm", span.attributes.get(RumConstants.START_TYPE_KEY))
     }
+
+    /**
+     * A warm start re-runs onCreate, so the hierarchy is inflated and drawn from scratch and its
+     * TTID is the same quantity cold start measures. The span therefore stays open past
+     * onActivityPostResumed until the frame is on screen.
+     */
+    @Test
+    fun warmStart_waitsForFirstDraw_thenRecordsTtidAndEnds() {
+        val screen = DrawableActivity()
+        val trackableTracer = warmTracerFor(screen.activity)
+
+        trackableTracer.startActivityCreation()
+        trackableTracer.endSpanForActivityResumed(screen.activity)
+
+        // Resumed has returned, but the frame has not been drawn: nothing is exported yet.
+        assertTrue(otelTesting.spans.isEmpty())
+
+        screen.drawFrame()
+
+        val span = this.singleSpan
+        assertEquals(RumConstants.APP_START_SPAN_NAME, span.name)
+        assertEquals("warm", span.attributes.get(RumConstants.START_TYPE_KEY))
+        assertTrue(span.events.any { it.name == TTID })
+    }
+
+    /**
+     * Backgrounding before the first frame legitimately ends the span early and without a TTID --
+     * no frame was ever shown. The late draw callback must not then end whatever span started
+     * since, which is what the identity check in [ActiveSpan.endDeferred] guards.
+     */
+    @Test
+    fun warmStart_drawAfterSpanAlreadyEnded_doesNotEndAnUnrelatedSpan() {
+        val screen = DrawableActivity()
+        val trackableTracer = warmTracerFor(screen.activity)
+
+        trackableTracer.startActivityCreation()
+        trackableTracer.endSpanForActivityResumed(screen.activity)
+
+        // onPause ends it without a frame, then an unrelated lifecycle span starts.
+        trackableTracer.endActiveSpan()
+        trackableTracer.startSpanIfNoneInProgress("Paused")
+
+        screen.drawFrame()
+
+        val appStart = otelTesting.spans.single { it.name == RumConstants.APP_START_SPAN_NAME }
+        assertTrue(appStart.events.none { it.name == TTID })
+        // The unrelated span is still open -- the stale callback did not close it.
+        assertTrue(activeSpan.spanInProgress())
+    }
+
+    /**
+     * Waiting for the frame must not hold the active slot: [ActiveSpan.spanInProgress] is what
+     * gates `startSpanIfNoneInProgress`, so a span parked there would swallow the next lifecycle
+     * span and misfile its events onto app.start. An activity that finishes itself from onResume
+     * pauses inside the one-frame window, which is exactly when that happens.
+     */
+    @Test
+    fun warmStart_pausedBeforeTheFrame_stillProducesItsOwnLifecycleSpan() {
+        val screen = DrawableActivity()
+        val trackableTracer = warmTracerFor(screen.activity)
+
+        trackableTracer.startActivityCreation()
+        trackableTracer.endSpanForActivityResumed(screen.activity)
+
+        // onActivityPrePaused arrives before the frame: it must get a span of its own.
+        trackableTracer.startSpanIfNoneInProgress("Paused")
+        trackableTracer.addEvent("activityPrePaused")
+        trackableTracer.endActiveSpan()
+
+        screen.drawFrame()
+
+        val appStart = otelTesting.spans.single { it.name == RumConstants.APP_START_SPAN_NAME }
+        assertTrue(appStart.events.none { it.name == TTID })
+        assertTrue(appStart.events.none { it.name == "activityPrePaused" })
+        val paused = otelTesting.spans.single { it.name == RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME }
+        assertEquals("Paused", paused.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
+        assertTrue(paused.events.any { it.name == "activityPrePaused" })
+    }
+
+    /**
+     * Deferring the end must not extend how long the span stays current on the main thread.
+     * `ActiveSpan.startSpan` calls `makeCurrent()`, so anything started from onResume while the
+     * scope was open -- a profile fetch, a database open, a coroutine -- would be parented to
+     * app.start purely for having been spawned during the wait for a frame.
+     */
+    @Test
+    fun warmStart_popsTheSpanOffTheThreadBeforeWaitingForTheFrame() {
+        val screen = DrawableActivity()
+        val trackableTracer = warmTracerFor(screen.activity)
+
+        val beforeStart = Span.current().spanContext.spanId
+        trackableTracer.startActivityCreation()
+        val whileCreating = Span.current().spanContext.spanId
+        trackableTracer.endSpanForActivityResumed(screen.activity)
+        val afterResumed = Span.current().spanContext.spanId
+
+        // The span becomes current while the activity is being created, and must be popped back
+        // off once resumed returns -- even though the span itself stays open awaiting the frame.
+        // Compared against the context in place beforehand rather than asserting invalidity, so
+        // ambient context from another test cannot mask a real leak.
+        assertNotEquals(beforeStart, whileCreating)
+        assertEquals(beforeStart, afterResumed)
+        // Out of the active slot as well as off the thread, so the next lifecycle span can start.
+        assertFalse(activeSpan.spanInProgress())
+        assertTrue(otelTesting.spans.isEmpty())
+
+        screen.drawFrame()
+
+        val span = this.singleSpan
+        assertEquals("warm", span.attributes.get(RumConstants.START_TYPE_KEY))
+        assertTrue(span.events.any { it.name == TTID })
+    }
+
+    /**
+     * An activity created but stopped before it ever resumes -- launched into the background, or
+     * behind the keyguard -- ends its warm span through a callback that never reaches
+     * endSpanForActivityResumed. The wait must not survive that and land on the hot start that
+     * follows: hot re-composites a hierarchy that is already laid out, so its first draw answers a
+     * different question from cold's and warm's and is deliberately excluded from TTID.
+     */
+    @Test
+    fun warmStart_stoppedBeforeResuming_doesNotLeakTheWaitOntoAHotStart() {
+        val screen = DrawableActivity()
+        val trackableTracer = warmTracerFor(screen.activity)
+
+        trackableTracer.startActivityCreation()
+        trackableTracer.endActiveSpan()
+
+        // Back to the foreground: onActivityPreStarted makes this a "hot" app.start.
+        trackableTracer.initiateRestartSpanIfNecessary(false)
+        trackableTracer.endSpanForActivityResumed(screen.activity)
+
+        assertFalse(screen.isAwaitingDraw, "hot start must not wait for a frame")
+        val hot = otelTesting.spans.last { it.name == RumConstants.APP_START_SPAN_NAME }
+        assertEquals("hot", hot.attributes.get(RumConstants.START_TYPE_KEY))
+        assertTrue(hot.events.none { it.name == TTID })
+    }
+
+    /**
+     * The same leak, on the path a multi-activity app takes: `initiateRestartSpanIfNecessary`
+     * declines to call it a hot start and makes a plain lifecycle span, which must not end up
+     * carrying an `app.start.*` event.
+     */
+    @Test
+    fun warmStart_stoppedBeforeResuming_doesNotLeakTheWaitOntoALifecycleSpan() {
+        val screen = DrawableActivity()
+        val trackableTracer = warmTracerFor(screen.activity)
+
+        trackableTracer.startActivityCreation()
+        trackableTracer.endActiveSpan()
+
+        trackableTracer.initiateRestartSpanIfNecessary(true)
+        trackableTracer.endSpanForActivityResumed(screen.activity)
+
+        assertFalse(screen.isAwaitingDraw, "a lifecycle span must not wait for a frame")
+        val restarted = otelTesting.spans.last()
+        assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, restarted.name)
+        assertTrue(restarted.events.none { it.name == TTID })
+    }
+
+    /** No window to observe: end immediately rather than wait for a callback that cannot arrive. */
+    @Test
+    fun warmStart_withoutAWindow_endsImmediately() {
+        val activity = mockk<Activity>()
+        every { activity.window } returns null
+        val trackableTracer = warmTracerFor(activity)
+
+        trackableTracer.startActivityCreation()
+        trackableTracer.endSpanForActivityResumed(activity)
+
+        val span = this.singleSpan
+        assertEquals("warm", span.attributes.get(RumConstants.START_TYPE_KEY))
+        assertTrue(span.events.none { it.name == TTID })
+    }
+
+    /** A tracer that has already seen its activity once, so a creation is a warm start. */
+    private fun warmTracerFor(activity: Activity) =
+        ActivityTracer(
+            activity = activity,
+            activeSpan = activeSpan,
+            tracer = tracer,
+            appStartupTimer = appStartupTimer,
+            initialAppActivity = "Activity",
+        )
+
 
     @Test
     fun create_initialActivity_firstTime() {

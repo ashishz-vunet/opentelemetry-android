@@ -28,9 +28,9 @@ class AnrInstrumentation : AndroidInstrumentation {
     /**
      * Adds an [EventAttributesExtractor] that will extract additional attributes.
      *
-     * Extractors run after the built-in attributes and may replace `error.runtime`. That is the
-     * supported in-process override for a wrapper that still reports through this instrumentation
-     * (this SDK otherwise always stamps `jvm`).
+     * Extractors run after the built-in attributes and may replace `error.runtime` or
+     * `exception.type`. That is the supported in-process override for a wrapper that still reports
+     * through this instrumentation (this SDK otherwise always stamps `jvm` / `ANR`).
      */
     fun addAttributesExtractor(extractor: EventAttributesExtractor<Array<StackTraceElement>>): AnrInstrumentation {
         additionalExtractors.add(extractor)
