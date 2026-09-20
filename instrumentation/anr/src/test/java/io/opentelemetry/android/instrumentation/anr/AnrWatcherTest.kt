@@ -82,7 +82,7 @@ class AnrWatcherTest {
 
         assertThat(captured.captured.get(AttributeKey.stringKey("exception.type"))).isEqualTo("ANR")
         // The stack trace is the other half of an actionable ANR row and must survive alongside it.
-        assertThat(captured.captured.get(AttributeKey.stringKey("exception.stacktrace"))).isNotNull()
+        assertThat(captured.captured.get(AttributeKey.stringKey("exception.stacktrace"))).isNotBlank()
     }
 
     /**
@@ -107,6 +107,12 @@ class AnrWatcherTest {
 
         assertThat(captured.captured.get(AttributeKey.stringKey("exception.type")))
             .isEqualTo("ApplicationNotResponding")
+        // putAll must merge, not replace: an extractor that only overrides exception.type
+        // must leave the rest of the built-in ANR row intact.
+        assertThat(captured.captured.get(AttributeKey.stringKey("error.runtime"))).isEqualTo("jvm")
+        assertThat(captured.captured.get(AttributeKey.stringKey("exception.stacktrace"))).isNotBlank()
+        assertThat(captured.captured.get(AttributeKey.stringKey("thread.name"))).isEqualTo(mainThread.name)
+        assertThat(captured.captured.get(AttributeKey.longKey("thread.id"))).isNotNull()
     }
 
     @Test
