@@ -18,6 +18,7 @@ When the [activity](../activity) instrumentation is installed, cold-start teleme
 | attachBaseContext phase | Event | `app.start.phase.attach_base_context.start` / `.end` | Requires **startup-agent** (see below) |
 | ContentProvider phase start | Event | `app.start.phase.content_providers.start` | `AppAnchorContentProvider` |
 | ContentProvider phase end | Event | `app.start.phase.content_providers.end` | `EarlyStartupContentProvider` |
+| Application.onCreate phase | Event | `app.start.phase.application.start` / `.end` | Requires **startup-agent** (see below) |
 
 ### SDK Initialization
 
@@ -31,22 +32,17 @@ When the [activity](../activity) instrumentation is installed, cold-start teleme
 
 Runtime instrumentation comes with the [android agent](../../android-agent) out of the box.
 
-### attachBaseContext events (startup-agent)
+### attachBaseContext and onCreate events (startup-agent)
 
-The `app.start.phase.attach_base_context.start` and `.end` events require compile-time weaving of
-`Application.attachBaseContext()` via the **startup-agent** artifact.
+The `app.start.phase.attach_base_context.start` / `.end` and `app.start.phase.application.start` /
+`.end` events require compile-time weaving of `Application.attachBaseContext()` and
+`Application.onCreate()` via the **startup-agent** artifact.
 
-Your `Application` subclass must **declare** `attachBaseContext` so the Android Byte Buddy
-plugin can apply advice (decoration mode cannot hook inherited methods). A minimal override is
-enough:
-
-```kotlin
-class MyApplication : Application() {
-    override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(base)
-    }
-}
-```
+No code change is needed in your `Application` subclass. When it declares the method, the agent
+applies advice to it; when it does not, the agent injects a pass-through override
+(`super` call wrapped in the same timing), since decoration mode cannot hook an inherited method
+directly. An inherited `final` method is left alone. Apps without their own `Application`
+subclass have nothing to weave, so these events are absent there.
 
 If you use the VuNet Gradle plugin (`vunet.telemetry.android`), the agent is wired automatically
 when `sdk = true` on an application module.

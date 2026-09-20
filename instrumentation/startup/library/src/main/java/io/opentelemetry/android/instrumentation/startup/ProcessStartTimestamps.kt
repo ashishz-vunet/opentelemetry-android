@@ -23,6 +23,14 @@ internal object ProcessStartTimestamps {
 
     @Volatile
     @JvmField
+    var applicationOnCreateStartElapsedRealtime: Long = 0L
+
+    @Volatile
+    @JvmField
+    var applicationOnCreateEndElapsedRealtime: Long = 0L
+
+    @Volatile
+    @JvmField
     var contentProvidersPhaseStartEpochMs: Long = 0L
 
     @Volatile
