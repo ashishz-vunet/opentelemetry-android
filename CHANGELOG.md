@@ -36,6 +36,15 @@
 
 ### Added
 
+- `device.anr` spans now carry **`exception.type = "ANR"`**. The attribute was absent entirely, so
+  every consumer had to either special-case ANR rows or substitute a value of its own — the
+  ingestion pipeline was defaulting it, which put the definition outside the SDK that produces the
+  signal. An ANR has no `Throwable`, so unlike `device.crash` (which reports the real
+  `throwable.javaClass.name`) there is nothing symbolic to derive; `ANR` is exactly the value the
+  pipeline already substituted, so nothing downstream changes while the span becomes
+  self-describing. Extractors registered via `addAttributesExtractor` still win on conflict, the
+  same in-process override already supported for `error.runtime`, so a Flutter/RN wrapper can report
+  its own taxonomy.
 - `ui.navigation` spans now carry **`navigation.duration_ms`**, the time from the user action that
   caused the navigation to the moment the destination was committed. Android previously emitted
   navigation timestamps only, with no duration anywhere, which left the responsiveness pillar with no
