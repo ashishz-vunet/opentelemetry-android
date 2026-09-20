@@ -6,6 +6,7 @@
 
 package io.opentelemetry.android.instrumentation.glide
 
+import android.app.Application
 import android.content.res.Resources
 import android.graphics.drawable.Drawable
 import android.view.View
@@ -17,24 +18,32 @@ import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.request.transition.Transition
 import io.mockk.every
 import io.mockk.mockk
+import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.common.internal.imageload.ImageLoadAttributes
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.StatusCode
+import io.opentelemetry.sdk.OpenTelemetrySdk
+import io.opentelemetry.sdk.common.Clock
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
+import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.data.StatusData
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import java.net.SocketTimeoutException
-import java.util.concurrent.TimeUnit
 
 class VunetGlideRequestListenerTest {
     companion object {
         @JvmField
         @RegisterExtension
         val otelTesting: OpenTelemetryExtension = OpenTelemetryExtension.create()
+
+        /** Five seconds, far larger than any real drift, so the assertion cannot be flaky. */
+        private const val SKEW_NANOS = 5_000_000_000L
     }
 
     private lateinit var listener: VunetGlideRequestListener
@@ -42,6 +51,8 @@ class VunetGlideRequestListenerTest {
     @BeforeEach
     fun setUp() {
         GlideSpanStore.spans.clear()
+        GlideInstrumentation.tracer = null
+        GlideInstrumentation.clock = null
         listener = VunetGlideRequestListener()
     }
 
@@ -49,6 +60,7 @@ class VunetGlideRequestListenerTest {
     fun tearDown() {
         GlideSpanStore.spans.clear()
         GlideInstrumentation.tracer = null
+        GlideInstrumentation.clock = null
     }
 
     /** Simulates what OtelSideEffectModelLoader does before the request fires. */
@@ -58,11 +70,12 @@ class VunetGlideRequestListenerTest {
                 .tracerProvider
                 .tracerBuilder("test")
                 .build()
-        val startEpochNanos = System.currentTimeMillis() * 1_000_000
+        // Mirrors OtelSideEffectModelLoader: no explicit start timestamp, so both ends come from
+        // the SDK clock. Setting one from System.currentTimeMillis() here, as this helper used to,
+        // reproduced the production bug inside the fixture itself.
         val span =
             tracer
                 .spanBuilder(IMAGE_LOAD_SPAN_NAME)
-                .setStartTimestamp(startEpochNanos, TimeUnit.NANOSECONDS)
                 .setAttribute(ATTR_IMAGE_URL, "https://cdn.bank.com/logo.png")
                 .setAttribute(ATTR_IMAGE_MODEL_TYPE, model.javaClass.name)
                 .startSpan()
@@ -211,6 +224,109 @@ class VunetGlideRequestListenerTest {
         // URL sanitisation must strip the query parameter
         assertThat(span.attributes[ATTR_IMAGE_URL]).isEqualTo("https://cdn.bank.com/logo.png")
         assertThat(span.attributes[ATTR_IMAGE_URL]).doesNotContain("SECRET")
+
+        GlideInstrumentation.tracer = null
+    }
+
+    /**
+     * Reproduces the production defect through the real install wiring.
+     *
+     * On device the SDK clock is `OtelAndroidClock`: a wall-clock baseline sampled **once** at
+     * process start, plus `SystemClock.elapsedRealtimeNanos()`. It therefore drifts away from
+     * `System.currentTimeMillis()` and never re-syncs. Reading the span start from
+     * `currentTimeMillis()` — or from `Clock.getDefault()` — while `span.end()` stamps the end
+     * from the SDK clock puts the two ends in different time domains, and for a memory-cache hit
+     * the drift is enough to invert them.
+     *
+     * Assigning tracer and clock by hand would not catch `install` capturing `Clock.getDefault()`
+     * instead of `openTelemetryRum.clock`. This test goes through [GlideInstrumentation.install]
+     * with a rum whose clock and tracer provider share the same lagging instance.
+     */
+    @Test
+    fun `synthetic span does not invert when the sdk clock lags wall time`() {
+        val laggingClock =
+            object : Clock {
+                override fun now(): Long = System.currentTimeMillis() * 1_000_000 - SKEW_NANOS
+
+                override fun nanoTime(): Long = System.nanoTime()
+            }
+        val exporter = InMemorySpanExporter.create()
+        val provider =
+            SdkTracerProvider
+                .builder()
+                .setClock(laggingClock)
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
+                .build()
+        val rum = mockk<OpenTelemetryRum>()
+        every { rum.clock } returns laggingClock
+        every { rum.openTelemetry } returns
+            OpenTelemetrySdk.builder().setTracerProvider(provider).build()
+
+        GlideInstrumentation().install(mockk<Application>(relaxed = true), rum)
+        assertThat(GlideInstrumentation.clock).isSameAs(laggingClock)
+
+        listener.onResourceReady(Any(), "https://cdn.bank.com/logo.png", null, DataSource.MEMORY_CACHE, true)
+
+        val span = exporter.finishedSpanItems.single()
+        assertThat(span.endEpochNanos).isGreaterThanOrEqualTo(span.startEpochNanos)
+        // Wall-clock start would sit ~SKEW ahead of this tracer's end and fail the check above;
+        // this one also fails if install captured Clock.getDefault() instead of rum.clock.
+        assertThat(span.startEpochNanos)
+            .isLessThan(System.currentTimeMillis() * 1_000_000 - SKEW_NANOS / 2)
+
+        provider.shutdown()
+    }
+
+    @Test
+    fun `synthetic memory-cache span never ends before it starts`() {
+        GlideInstrumentation.tracer =
+            otelTesting.openTelemetry.tracerProvider.tracerBuilder("test").build()
+        GlideInstrumentation.clock = Clock.getDefault()
+
+        listener.onResourceReady(Any(), "https://cdn.bank.com/logo.png", null, DataSource.MEMORY_CACHE, true)
+
+        val span = otelTesting.spans.single()
+        assertThat(span.endEpochNanos).isGreaterThanOrEqualTo(span.startEpochNanos)
+
+        GlideInstrumentation.tracer = null
+        GlideInstrumentation.clock = null
+    }
+
+    @Test
+    fun `every emitted image load span has a non-negative duration`() {
+        GlideInstrumentation.tracer =
+            otelTesting.openTelemetry.tracerProvider.tracerBuilder("test").build()
+        GlideInstrumentation.clock = Clock.getDefault()
+
+        // The pre-primed path (disk/network), the synthetic success path, and the synthetic
+        // failure path all reach span.end() by different routes.
+        val primed = "https://cdn.bank.com/a.png"
+        primeStore(primed)
+        listener.onResourceReady(Any(), primed, null, DataSource.REMOTE, false)
+        listener.onResourceReady(Any(), "https://cdn.bank.com/b.png", null, DataSource.MEMORY_CACHE, false)
+        listener.onLoadFailed(null, "https://cdn.bank.com/c.png", mockk(relaxed = true), false)
+
+        assertThat(otelTesting.spans).hasSize(3)
+        assertThat(otelTesting.spans).allSatisfy { span ->
+            assertThat(span.endEpochNanos).isGreaterThanOrEqualTo(span.startEpochNanos)
+        }
+
+        GlideInstrumentation.tracer = null
+        GlideInstrumentation.clock = null
+    }
+
+    @Test
+    fun `synthetic span still records when no clock is available`() {
+        // Tracer present but clock absent: the start falls back to implicit rather than being
+        // dropped, so a failure still reaches the backend.
+        GlideInstrumentation.tracer =
+            otelTesting.openTelemetry.tracerProvider.tracerBuilder("test").build()
+        GlideInstrumentation.clock = null
+
+        listener.onResourceReady(Any(), "https://cdn.bank.com/d.png", null, DataSource.MEMORY_CACHE, false)
+
+        val span = otelTesting.spans.single()
+        assertThat(span.endEpochNanos).isGreaterThanOrEqualTo(span.startEpochNanos)
 
         GlideInstrumentation.tracer = null
     }

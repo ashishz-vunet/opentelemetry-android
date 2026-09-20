@@ -4,6 +4,18 @@
 
 ### Fixed
 
+- `image.load` spans can no longer end before they start. Glide set the span start from
+  `System.currentTimeMillis() * 1_000_000` but let `span.end()` take the end from the SDK clock,
+  which on Android is `OtelAndroidClock` — a wall-clock baseline sampled once at process start plus
+  `SystemClock.elapsedRealtimeNanos()`. The two drift apart and never re-sync, so for a memory-cache
+  hit, where start and end are microseconds apart, the drift was enough to invert them; production
+  showed 6 such spans. Both ends now come from the SDK clock, which is a fixed baseline plus a
+  monotonic counter, so an end can never precede a start — a structural guarantee rather than a
+  narrowed window. Using wall-clock time for both ends would have fixed the domain mismatch but not
+  this, since `currentTimeMillis` is not monotonic and an NTP correction mid-load would reintroduce
+  a negative duration. Coil was already correct and is unchanged. Sub-millisecond durations on the
+  memory-cache path now survive instead of being truncated by `currentTimeMillis`'s millisecond
+  resolution.
 - OkHttp `http.client` spans can no longer run for hours. Since phase-timing capture moved span
   completion to OkHttp's `EventListener`, a span ended only when the call was reported finished —
   and OkHttp reports that when the response body reaches EOF **or is closed**. A body read to

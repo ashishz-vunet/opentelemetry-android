@@ -9,6 +9,7 @@ import android.app.Application
 import io.mockk.every
 import io.mockk.mockk
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.sdk.common.Clock
 import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
@@ -27,19 +28,34 @@ class GlideInstrumentationTest {
     private lateinit var context: Application
     private lateinit var openTelemetryRum: OpenTelemetryRum
 
+    /**
+     * Distinct from [Clock.getDefault]. `isSameAs` against the default singleton would still pass
+     * if install assigned `Clock.getDefault()` instead of `openTelemetryRum.clock` — which is the
+     * original wall-clock domain mismatch.
+     */
+    private val rumClock =
+        object : Clock {
+            override fun now(): Long = Clock.getDefault().now()
+
+            override fun nanoTime(): Long = Clock.getDefault().nanoTime()
+        }
+
     @BeforeEach
     fun setUp() {
         GlideInstrumentation.tracer = null
+        GlideInstrumentation.clock = null
         GlideSpanStore.spans.clear()
         instrumentation = GlideInstrumentation()
         context = mockk(relaxed = true)
         openTelemetryRum = mockk()
         every { openTelemetryRum.openTelemetry } returns otelTesting.openTelemetry
+        every { openTelemetryRum.clock } returns rumClock
     }
 
     @AfterEach
     fun tearDown() {
         GlideInstrumentation.tracer = null
+        GlideInstrumentation.clock = null
         GlideSpanStore.spans.clear()
     }
 
@@ -48,6 +64,25 @@ class GlideInstrumentationTest {
         assertThat(GlideInstrumentation.tracer).isNull()
         instrumentation.install(context, openTelemetryRum)
         assertThat(GlideInstrumentation.tracer).isNotNull()
+    }
+
+    /**
+     * Without the clock, backdated synthetic spans fall back to an implicit start — correct, but it
+     * silently gives up the sub-millisecond duration the memory-cache path exists to report, and
+     * nothing else in the module would notice.
+     */
+    @Test
+    fun `install captures the sdk clock`() {
+        assertThat(GlideInstrumentation.clock).isNull()
+        instrumentation.install(context, openTelemetryRum)
+        assertThat(GlideInstrumentation.clock).isSameAs(openTelemetryRum.clock)
+    }
+
+    @Test
+    fun `uninstall clears the sdk clock`() {
+        instrumentation.install(context, openTelemetryRum)
+        instrumentation.uninstall(context, openTelemetryRum)
+        assertThat(GlideInstrumentation.clock).isNull()
     }
 
     @Test
