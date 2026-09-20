@@ -211,16 +211,18 @@ internal class AppStartupTimer(
             return
         }
         val clockNowNanos = startupClock.now()
+        val startNanos = elapsedRealtimeToClockNanos(startElapsed, clockNowNanos)
+        val endNanos = elapsedRealtimeToClockNanos(endElapsed, clockNowNanos)
         appStart.addEvent(
             EVENT_APPLICATION_START,
             Attributes.empty(),
-            elapsedRealtimeToClockNanos(startElapsed, clockNowNanos),
+            startNanos,
             TimeUnit.NANOSECONDS,
         )
         appStart.addEvent(
             EVENT_APPLICATION_END,
             Attributes.empty(),
-            elapsedRealtimeToClockNanos(endElapsed, clockNowNanos),
+            endNanos,
             TimeUnit.NANOSECONDS,
         )
         applicationOnCreateEventsRecorded = true

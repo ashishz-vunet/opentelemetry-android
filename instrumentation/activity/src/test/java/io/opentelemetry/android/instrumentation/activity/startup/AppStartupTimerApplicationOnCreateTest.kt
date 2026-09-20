@@ -56,6 +56,17 @@ class AppStartupTimerApplicationOnCreateTest {
     }
 
     @Test
+    fun `equal start and end timestamps emit a zero duration not an inversion`() {
+        val elapsed = SystemClock.elapsedRealtime() - 10
+        val appStart = runStartup(fakeProvider(elapsed, elapsed))
+
+        val start = appStart.events.single { it.name == AppStartupTimer.EVENT_APPLICATION_START }
+        val end = appStart.events.single { it.name == AppStartupTimer.EVENT_APPLICATION_END }
+        assertThat(end.epochNanos).isGreaterThanOrEqualTo(start.epochNanos)
+        assertThat((end.epochNanos - start.epochNanos) / 1_000_000).isEqualTo(0L)
+    }
+
+    @Test
     fun `no application events when timestamps are missing`() {
         val appStart = runStartup(fakeProvider(0L, 0L))
 
