@@ -48,6 +48,14 @@
 
 ### Added
 
+- **`InteractionContext.parentForManualSpan()`** is the supported parent for a span started by
+  hand (SDK wrappers, app code) that should attach to the tap that caused it. If the caller
+  already has a valid span current, that nesting is kept; otherwise a `ui.interaction` still
+  inside its active window becomes the parent; otherwise the current context is unchanged.
+  The call is read-only: it never makes a context current, so it cannot leak a `Scope`. It is
+  not `ActiveInteractionContext.parentContextOr`: that API overrides a same-trace span with
+  `activeSpan` (so a nested action would be re-parented under navigation after `activate()`)
+  and follows navigation rather than the tap.
 - **`app.start.phase.application.start` / `.end` around `Application.onCreate()`** on the cold
   `app.start` span. The gap between `content_providers.end` and `first_activity` was a black box;
   it is mostly `onCreate` (DI graphs, SDK init that is not a ContentProvider), the phase startup

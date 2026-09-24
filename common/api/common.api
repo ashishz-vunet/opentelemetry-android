@@ -66,6 +66,13 @@ public abstract interface class io/opentelemetry/android/common/UncaughtExceptio
 	public abstract fun recordUnhandledException (Ljava/lang/Thread;Ljava/lang/Throwable;)V
 }
 
+public final class io/opentelemetry/android/common/interaction/InteractionContext {
+	public static final field INSTANCE Lio/opentelemetry/android/common/interaction/InteractionContext;
+	public static final fun parentForManualSpan ()Lio/opentelemetry/context/Context;
+	public static final fun parentForManualSpan (Lio/opentelemetry/context/Context;)Lio/opentelemetry/context/Context;
+	public static synthetic fun parentForManualSpan$default (Lio/opentelemetry/context/Context;ILjava/lang/Object;)Lio/opentelemetry/context/Context;
+}
+
 public final class io/opentelemetry/android/common/internal/features/networkattributes/CurrentNetworkAttributesExtractor {
 	public fun <init> ()V
 	public final fun extract (Lio/opentelemetry/android/common/internal/features/networkattributes/data/CurrentNetwork;)Lio/opentelemetry/api/common/Attributes;

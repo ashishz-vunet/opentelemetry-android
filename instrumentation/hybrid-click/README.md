@@ -44,3 +44,17 @@ OpenTelemetryRumInitializer.initialize(
 This controls the parenting window for async work triggered by a click (for example network
 requests or navigation), not the `ui.interaction` span duration. The span itself ends immediately
 after the tap.
+
+## Attaching your own spans to a tap
+
+A View `OnClickListener` runs after the tap's context scope has already closed, so
+`Span.current()` is not the tap. Parent a hand-started span to it with:
+
+```kotlin
+tracer.spanBuilder("checkout")
+    .setParent(InteractionContext.parentForManualSpan())
+    .startSpan()
+```
+
+This is read-only: it never makes a context current. The tap stays available as a parent for
+`activeContextWindowMillis` (default 500 ms). Work started after that window gets its own trace.
