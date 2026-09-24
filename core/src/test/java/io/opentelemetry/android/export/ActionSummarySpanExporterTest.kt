@@ -44,6 +44,25 @@ internal class ActionSummarySpanExporterTest {
     }
 
     @Test
+    fun keepsSummaryAlreadyOnSpan() {
+        val span =
+            TestSpanHelper.span(
+                RumConstants.UI_INTERACTION_SPAN_NAME,
+                Attributes.of(
+                    AttributeKey.stringKey("app.widget.type"), "button",
+                    RumConstants.APP_ACTION_SUMMARY_KEY, "Tapped 'Pay' on Checkout",
+                ),
+            )
+
+        exporter.export(listOf(span))
+
+        val exported = delegate.finishedSpanItems.single()
+        assertThat(exported).isSameAs(span)
+        assertThat(exported.attributes.get(RumConstants.APP_ACTION_SUMMARY_KEY))
+            .isEqualTo("Tapped 'Pay' on Checkout")
+    }
+
+    @Test
     fun passesUnsupportedSpanUnmodified() {
         val span = TestSpanHelper.span("app.metrics", Attributes.empty())
 

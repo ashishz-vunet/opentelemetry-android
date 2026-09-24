@@ -37,6 +37,10 @@ import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.logs.Severity
+import io.opentelemetry.api.trace.SpanContext
+import io.opentelemetry.api.trace.SpanKind
+import io.opentelemetry.api.trace.TraceFlags
+import io.opentelemetry.api.trace.TraceState
 import io.opentelemetry.context.propagation.TextMapGetter
 import io.opentelemetry.context.propagation.TextMapPropagator
 import io.opentelemetry.contrib.disk.buffering.exporters.SpanToDiskExporter
@@ -61,7 +65,9 @@ import io.opentelemetry.sdk.testing.exporter.InMemoryLogRecordExporter
 import io.opentelemetry.sdk.testing.exporter.InMemoryMetricExporter
 import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter
+import io.opentelemetry.sdk.testing.trace.TestSpanData
 import io.opentelemetry.sdk.trace.SdkTracerProviderBuilder
+import io.opentelemetry.sdk.trace.data.StatusData
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 import io.opentelemetry.sdk.trace.export.SpanExporter
 import io.opentelemetry.semconv.incubating.SessionIncubatingAttributes
@@ -122,6 +128,7 @@ class OpenTelemetryRumBuilderTest {
         InitializationEvents.resetForTest()
         set(null)
         AppStartSpans.clear()
+        BridgedSpans.clear()
     }
 
     @Test
@@ -183,6 +190,57 @@ class OpenTelemetryRumBuilderTest {
         span.end()
 
         assertThat(AppStartSpans.current).isNull()
+    }
+
+    @Test
+    fun bridgedSpansLeaveThroughTheSpanExporterWithTheRumResource() {
+        // Bridged spans never touch Context on this thread, so the batch worker would be the
+        // first to load ContextStorage — through the wrong classloader under Robolectric, which
+        // breaks every later test in the class. Load it here first, as a live span would.
+        io.opentelemetry.context.Context.current()
+        createAndSetServiceManager()
+        makeBuilder()
+            .setResource(resource)
+            .addSpanExporterCustomizer { spanExporter }
+            .build()
+        val bridged =
+            TestSpanData
+                .builder()
+                .setName("ui.navigation")
+                .setKind(SpanKind.INTERNAL)
+                .setSpanContext(
+                    SpanContext.create(
+                        "0123456789abcdef0123456789abcdef",
+                        "0123456789abcdef",
+                        TraceFlags.getSampled(),
+                        TraceState.getDefault(),
+                    ),
+                ).setStatus(StatusData.unset())
+                .setHasEnded(true)
+                .setStartEpochNanos(1_000)
+                .setEndEpochNanos(5_000)
+                .build()
+
+        assertThat(
+            BridgedSpans.export(
+                listOf(bridged),
+                Attributes.of(AttributeKey.stringKey("telemetry.sdk.language"), "dart"),
+            ),
+        ).isTrue()
+
+        Awaitility
+            .await()
+            .atMost(Duration.ofSeconds(10))
+            .untilAsserted {
+                BridgedSpans.forceFlush()
+                assertThat(spanExporter.finishedSpanItems).hasSize(1)
+                val exported = spanExporter.finishedSpanItems[0]
+                assertThat(exported.spanContext).isEqualTo(bridged.spanContext)
+                assertThat(exported.resource.getAttribute(AttributeKey.stringKey("test.attribute")))
+                    .isEqualTo("abcdef")
+                assertThat(exported.resource.getAttribute(AttributeKey.stringKey("telemetry.sdk.language")))
+                    .isEqualTo("dart")
+            }
     }
 
     @Test

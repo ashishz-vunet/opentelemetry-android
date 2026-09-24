@@ -564,6 +564,8 @@ class OpenTelemetryRumBuilder internal constructor(
 
         val batchSpanProcessor = BatchSpanProcessor.builder(spanExporter).build()
         tracerProviderBuilder.addSpanProcessor(batchSpanProcessor)
+        // Wrapper SDKs (Flutter, React Native) export their spans into this same queue.
+        BridgedSpans.publish(batchSpanProcessor, resource)
 
         for (customizer in tracerProviderCustomizers) {
             tracerProviderBuilder = customizer.apply(tracerProviderBuilder, context)

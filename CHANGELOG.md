@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- `ActionSummarySpanExporter` no longer overwrites a `semantic.summary` a span already carries.
+  Wrapper SDKs (Flutter) set their own summary from attributes the native summarizer does not know
+  about; on `ui.interaction`, `ui.navigation`, `image.load` and HTTP client spans it was replaced
+  with a generic native one (for example `Clicked element`).
+
 - `image.load` spans can no longer end before they start. Glide set the span start from
   `System.currentTimeMillis() * 1_000_000` but let `span.end()` take the end from the SDK clock,
   which on Android is `OtelAndroidClock` — a wall-clock baseline sampled once at process start plus
@@ -48,6 +53,15 @@
 
 ### Added
 
+- **`BridgedSpans`**: an entry point for spans a wrapper SDK (Flutter, React Native) created and
+  ended with its own tracer. `BridgedSpans.export(spans, resourceOverrides)` hands them to the
+  batch span processor the SDK already drains, so they leave through the same pipeline as native
+  spans — disk buffering, action summary, export-loop marker, exporter customizers, one OTLP client
+  — and are covered by the crash flush. Each span gets the SDK's resource merged with the caller's
+  overrides; trace and span ids, timestamps and attributes are kept. `BridgedSpans.forceFlush()`
+  flushes that queue. Wrappers previously had to run a second exporter, whose spans missed the
+  device resource, the export-loop guard and the crash flush. Not available when the host app
+  supplies its own pre-built `OpenTelemetrySdk`.
 - **`app.start.phase.application.start` / `.end` around `Application.onCreate()`** on the cold
   `app.start` span. The gap between `content_providers.end` and `first_activity` was a black box;
   it is mostly `onCreate` (DI graphs, SDK init that is not a ContentProvider), the phase startup
