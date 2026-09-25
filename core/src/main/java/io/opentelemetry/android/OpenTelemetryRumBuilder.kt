@@ -68,6 +68,7 @@ import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader
 import io.opentelemetry.sdk.resources.Resource
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.SdkTracerProviderBuilder
+import io.opentelemetry.sdk.trace.SpanProcessor
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor
 import io.opentelemetry.sdk.trace.export.SpanExporter
 import java.io.File
@@ -123,6 +124,7 @@ class OpenTelemetryRumBuilder internal constructor(
 
     private var resource: Resource = createDefault(context)
     private var exportScheduleHandler: ExportScheduleHandler? = null
+    private var bridgedSpanProcessor: SpanProcessor? = null
     private var sessionProvider: SessionProvider = SessionProvider.getNoop()
 
     /**
@@ -374,6 +376,7 @@ class OpenTelemetryRumBuilder internal constructor(
                 .setShutdownHook {
                     exportScheduleHandler?.disable()
                     services.close()
+                    bridgedSpanProcessor?.let(BridgedSpans::clearIfPublished)
                 }
 
         // AsyncTask is deprecated but the thread pool is still used all over the Android SDK
@@ -566,6 +569,7 @@ class OpenTelemetryRumBuilder internal constructor(
         tracerProviderBuilder.addSpanProcessor(batchSpanProcessor)
         // Wrapper SDKs (Flutter, React Native) export their spans into this same queue.
         BridgedSpans.publish(batchSpanProcessor, resource)
+        bridgedSpanProcessor = batchSpanProcessor
 
         for (customizer in tracerProviderCustomizers) {
             tracerProviderBuilder = customizer.apply(tracerProviderBuilder, context)

@@ -30,33 +30,32 @@ import java.util.concurrent.atomic.AtomicReference
  * processor on, bridged spans go through disk buffering, action summary, the export-loop marker,
  * exporter customizers and the one OTLP client, exactly like native spans.
  *
- * Each span is given the SDK's resource, fixed at process start, merged with the caller's
- * `resourceOverrides` (for example the wrapper's `telemetry.sdk.language`). Trace and span ids,
- * timestamps and attributes are kept as the wrapper recorded them; `session.id` and global
- * attributes are the caller's to stamp, because the processors that add them only run when a
- * span starts inside this SDK.
+ * Each span is given the SDK's resource, fixed at process start, so bridged and native spans
+ * share one resource. Trace and span ids, timestamps and attributes are kept as the wrapper
+ * recorded them; `session.id` and global attributes are the caller's to stamp, because the
+ * processors that add them only run when a span starts inside this SDK.
  *
  * Same visibility model as [AppStartSpans]: anyone can export, only the builder can publish the
- * target. Not populated when the host app supplies its own pre-built `OpenTelemetrySdk` via
- * `SdkPreconfiguredRumBuilder` — the SDK does not own a batch processor on that path.
+ * target. Cleared when that RUM instance shuts down. Not populated when the host app supplies
+ * its own pre-built `OpenTelemetrySdk` via `SdkPreconfiguredRumBuilder` — the SDK does not own a
+ * batch processor on that path.
  */
 object BridgedSpans {
     private val target = AtomicReference<Target?>()
 
     /**
-     * Queues [spans] for export through the SDK's span pipeline. Safe to call from any thread.
+     * Hands [spans] to the SDK's span processor. Safe to call from any thread.
      *
-     * @return false when the SDK has not been built, in which case the spans are dropped.
+     * @return true when the spans were handed to the processor. From there they are treated
+     *   exactly like native spans: the processor still drops a span that is not sampled, or one
+     *   that arrives while its queue is full. False when no RUM instance is running (not built
+     *   yet, or shut down), in which case the spans are dropped.
      */
     @JvmStatic
-    fun export(
-        spans: Collection<SpanData>,
-        resourceOverrides: Attributes,
-    ): Boolean {
+    fun export(spans: Collection<SpanData>): Boolean {
         val t = target.get() ?: return false
-        val resource = t.resourceWith(resourceOverrides)
         for (span in spans) {
-            t.processor.onEnd(BridgedReadableSpan(span, resource))
+            t.processor.onEnd(BridgedReadableSpan(span, t.resource))
         }
         return true
     }
@@ -72,26 +71,25 @@ object BridgedSpans {
         target.set(Target(processor, resource))
     }
 
+    /**
+     * Clears the target if [processor] is still the one published, so shutting down a RUM
+     * instance cannot clear a newer one's.
+     */
+    internal fun clearIfPublished(processor: SpanProcessor) {
+        val current = target.get() ?: return
+        if (current.processor === processor) {
+            target.compareAndSet(current, null)
+        }
+    }
+
     internal fun clear() {
         target.set(null)
     }
 
     private class Target(
         val processor: SpanProcessor,
-        private val resource: Resource,
-    ) {
-        // The overrides are constant for a process in practice, so the merge is done once and
-        // reused for as long as the caller passes the same instance.
-        @Volatile
-        private var merged: Pair<Attributes, Resource>? = null
-
-        fun resourceWith(overrides: Attributes): Resource {
-            merged?.let { (key, value) -> if (key === overrides) return value }
-            val value = if (overrides.isEmpty) resource else resource.merge(Resource.create(overrides))
-            merged = overrides to value
-            return value
-        }
-    }
+        val resource: Resource,
+    )
 
     /** Presents an already-ended [SpanData] to a [SpanProcessor], with the SDK's resource. */
     private class BridgedReadableSpan(

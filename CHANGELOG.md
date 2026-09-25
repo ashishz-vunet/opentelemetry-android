@@ -54,14 +54,15 @@
 ### Added
 
 - **`BridgedSpans`**: an entry point for spans a wrapper SDK (Flutter, React Native) created and
-  ended with its own tracer. `BridgedSpans.export(spans, resourceOverrides)` hands them to the
-  batch span processor the SDK already drains, so they leave through the same pipeline as native
-  spans — disk buffering, action summary, export-loop marker, exporter customizers, one OTLP client
-  — and are covered by the crash flush. Each span gets the SDK's resource merged with the caller's
-  overrides; trace and span ids, timestamps and attributes are kept. `BridgedSpans.forceFlush()`
-  flushes that queue. Wrappers previously had to run a second exporter, whose spans missed the
-  device resource, the export-loop guard and the crash flush. Not available when the host app
-  supplies its own pre-built `OpenTelemetrySdk`.
+  ended with its own tracer. `BridgedSpans.export(spans)` hands them to the batch span processor
+  the SDK already drains, so they leave through the same pipeline as native spans — disk buffering,
+  action summary, export-loop marker, exporter customizers, one OTLP client — and are covered by the
+  crash flush. Each span gets the SDK's resource, so bridged and native spans share one; trace and
+  span ids, timestamps and attributes are kept. `BridgedSpans.forceFlush()` flushes that queue.
+  Shutting the RUM instance down unpublishes it, and `export()` then returns false. Wrappers
+  previously had to run a second exporter, whose spans missed the device resource, the export-loop
+  guard and the crash flush. Not available when the host app supplies its own pre-built
+  `OpenTelemetrySdk`.
 - **`app.start.phase.application.start` / `.end` around `Application.onCreate()`** on the cold
   `app.start` span. The gap between `content_providers.end` and `first_activity` was a black box;
   it is mostly `onCreate` (DI graphs, SDK init that is not a ContentProvider), the phase startup

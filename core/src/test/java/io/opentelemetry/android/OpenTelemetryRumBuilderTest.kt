@@ -198,11 +198,13 @@ class OpenTelemetryRumBuilderTest {
         // first to load ContextStorage — through the wrong classloader under Robolectric, which
         // breaks every later test in the class. Load it here first, as a live span would.
         io.opentelemetry.context.Context.current()
-        createAndSetServiceManager()
-        makeBuilder()
-            .setResource(resource)
-            .addSpanExporterCustomizer { spanExporter }
-            .build()
+        val services = createAndSetServiceManager()
+        every { services.close() } returns Unit
+        val rum =
+            makeBuilder()
+                .setResource(resource)
+                .addSpanExporterCustomizer { spanExporter }
+                .build()
         val bridged =
             TestSpanData
                 .builder()
@@ -221,12 +223,7 @@ class OpenTelemetryRumBuilderTest {
                 .setEndEpochNanos(5_000)
                 .build()
 
-        assertThat(
-            BridgedSpans.export(
-                listOf(bridged),
-                Attributes.of(AttributeKey.stringKey("telemetry.sdk.language"), "dart"),
-            ),
-        ).isTrue()
+        assertThat(BridgedSpans.export(listOf(bridged))).isTrue()
 
         Awaitility
             .await()
@@ -236,11 +233,13 @@ class OpenTelemetryRumBuilderTest {
                 assertThat(spanExporter.finishedSpanItems).hasSize(1)
                 val exported = spanExporter.finishedSpanItems[0]
                 assertThat(exported.spanContext).isEqualTo(bridged.spanContext)
-                assertThat(exported.resource.getAttribute(AttributeKey.stringKey("test.attribute")))
-                    .isEqualTo("abcdef")
-                assertThat(exported.resource.getAttribute(AttributeKey.stringKey("telemetry.sdk.language")))
-                    .isEqualTo("dart")
+                assertThat(exported.resource).isEqualTo(resource)
             }
+
+        // Shutting the RUM instance down unpublishes it: wrappers get `false` instead of
+        // feeding a processor that no longer exports.
+        rum.shutdown()
+        assertThat(BridgedSpans.export(listOf(bridged))).isFalse()
     }
 
     @Test

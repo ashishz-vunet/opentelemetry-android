@@ -34,14 +34,8 @@ internal class BridgedSpansTest {
             Attributes.of(
                 stringKey("service.name"), "app",
                 stringKey("device.model.name"), "Pixel",
-                stringKey("vunet.sdk.version"), "0.0.11",
-                stringKey("telemetry.sdk.language"), "java",
+                stringKey("vunet.sdk.version"), "0.0.12",
             ),
-        )
-    private val overrides =
-        Attributes.of(
-            stringKey("telemetry.sdk.language"), "dart",
-            stringKey("vunet.flutter.plugin.version"), "1.2.3",
         )
 
     @BeforeEach
@@ -57,16 +51,16 @@ internal class BridgedSpansTest {
 
     @Test
     fun `drops spans until the SDK publishes a target`() {
-        assertThat(BridgedSpans.export(listOf(span()), overrides)).isFalse()
+        assertThat(BridgedSpans.export(listOf(span()))).isFalse()
         assertThat(BridgedSpans.forceFlush().isSuccess).isTrue()
     }
 
     @Test
-    fun `exports through the published processor with the RUM resource plus overrides`() {
+    fun `exports through the published processor with the RUM resource`() {
         BridgedSpans.publish(processor, rumResource)
         val original = span()
 
-        assertThat(BridgedSpans.export(listOf(original), overrides)).isTrue()
+        assertThat(BridgedSpans.export(listOf(original))).isTrue()
         assertThat(BridgedSpans.forceFlush().join(5, TimeUnit.SECONDS).isSuccess).isTrue()
 
         val exported = exporter.finishedSpanItems.single()
@@ -75,29 +69,35 @@ internal class BridgedSpansTest {
         assertThat(exported.startEpochNanos).isEqualTo(original.startEpochNanos)
         assertThat(exported.endEpochNanos).isEqualTo(original.endEpochNanos)
         assertThat(exported.attributes).isEqualTo(original.attributes)
-        val resource = exported.resource.attributes
-        assertThat(resource.get(stringKey("device.model.name"))).isEqualTo("Pixel")
-        assertThat(resource.get(stringKey("vunet.sdk.version"))).isEqualTo("0.0.11")
-        assertThat(resource.get(stringKey("telemetry.sdk.language"))).isEqualTo("dart")
-        assertThat(resource.get(stringKey("vunet.flutter.plugin.version"))).isEqualTo("1.2.3")
+        assertThat(exported.resource).isSameAs(rumResource)
     }
 
     @Test
-    fun `reuses the merged resource for the same overrides`() {
+    fun `stops accepting spans once its processor is unpublished`() {
         BridgedSpans.publish(processor, rumResource)
 
-        BridgedSpans.export(listOf(span(), span()), overrides)
-        BridgedSpans.forceFlush().join(5, TimeUnit.SECONDS)
+        BridgedSpans.clearIfPublished(processor)
 
-        val (first, second) = exporter.finishedSpanItems
-        assertThat(first.resource).isSameAs(second.resource)
+        assertThat(BridgedSpans.export(listOf(span()))).isFalse()
+        assertThat(BridgedSpans.forceFlush().isSuccess).isTrue()
+    }
+
+    @Test
+    fun `shutting down an older instance does not unpublish a newer one`() {
+        val older = SimpleSpanProcessor.create(InMemorySpanExporter.create())
+        BridgedSpans.publish(processor, rumResource)
+
+        BridgedSpans.clearIfPublished(older)
+
+        assertThat(BridgedSpans.export(listOf(span()))).isTrue()
+        older.shutdown()
     }
 
     @Test
     fun `unsampled spans are dropped by the processor`() {
         BridgedSpans.publish(processor, rumResource)
 
-        BridgedSpans.export(listOf(span(TraceFlags.getDefault())), overrides)
+        BridgedSpans.export(listOf(span(TraceFlags.getDefault())))
         BridgedSpans.forceFlush().join(5, TimeUnit.SECONDS)
 
         assertThat(exporter.finishedSpanItems).isEmpty()

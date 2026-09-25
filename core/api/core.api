@@ -13,7 +13,7 @@ public final class io/opentelemetry/android/AppStartSpans {
 
 public final class io/opentelemetry/android/BridgedSpans {
 	public static final field INSTANCE Lio/opentelemetry/android/BridgedSpans;
-	public static final fun export (Ljava/util/Collection;Lio/opentelemetry/api/common/Attributes;)Z
+	public static final fun export (Ljava/util/Collection;)Z
 	public static final fun forceFlush ()Lio/opentelemetry/sdk/common/CompletableResultCode;
 }
 
