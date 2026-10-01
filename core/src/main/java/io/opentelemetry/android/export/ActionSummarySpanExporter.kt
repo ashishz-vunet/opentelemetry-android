@@ -37,6 +37,9 @@ internal class ActionSummarySpanExporter(
     }
 
     private fun addSummaryIfApplicable(span: SpanData): SpanData {
+        // Spans bridged from a wrapper SDK (Flutter, React Native) arrive with their own summary,
+        // built from attributes this summarizer does not know about; keep it.
+        if (span.attributes.get(RumConstants.APP_ACTION_SUMMARY_KEY) != null) return span
         val summary = ActionSummarizer.summarize(span) ?: return span
         val newAttributes =
             span.attributes.toBuilder()
