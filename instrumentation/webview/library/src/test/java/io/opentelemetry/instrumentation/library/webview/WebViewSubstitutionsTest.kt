@@ -92,6 +92,7 @@ class WebViewSubstitutionsTest {
                 device = WebViewContext.DeviceInfo("Google", "Pixel 8", "14"),
                 screenName = { null },
                 events = { _, _ -> },
+                loadTraces = { _, _ -> null },
             ),
         )
         return api

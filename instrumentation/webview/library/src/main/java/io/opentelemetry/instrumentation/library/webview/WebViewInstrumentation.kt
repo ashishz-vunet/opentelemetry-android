@@ -24,10 +24,15 @@ import io.opentelemetry.instrumentation.library.webview.internal.WebViewContext
 import io.opentelemetry.instrumentation.library.webview.internal.WebViewContextBridge
 import io.opentelemetry.instrumentation.library.webview.internal.WebViewHandoffConfig
 import io.opentelemetry.instrumentation.library.webview.internal.WebViewSessionHandoff
+import io.opentelemetry.instrumentation.library.webview.internal.traceparentOf
+
+private const val TRACER_NAME = "io.opentelemetry.webview"
 
 /**
  * Hands the RUM session to WebView content as `window.__VUNET_CTX__` and a `VunetBridge` message
- * channel, so browser RUM joins the same session.
+ * channel, so browser RUM joins the same session. Each page load is also recorded as a
+ * `webview.load` span whose `traceparent` is handed to the page, so browser RUM's page load
+ * continues the native trace.
  *
  * Both are set up from [WebViewSubstitutions], which the `webview-agent` Byte Buddy plugin
  * substitutes for `WebView.loadUrl` and related calls at build time, so no app code is needed.
@@ -53,6 +58,7 @@ class WebViewInstrumentation internal constructor(
         }
         RumDiagnostics.d { "webview: substitution install" }
         val sessionProvider = openTelemetryRum.sessionProvider
+        val tracer = openTelemetryRum.openTelemetry.getTracer(TRACER_NAME)
         val bridge =
             WebViewContextBridge(
                 sessionProvider = sessionProvider,
@@ -63,6 +69,16 @@ class WebViewInstrumentation internal constructor(
                 device = WebViewContext.DeviceInfo(Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE),
                 screenName = { webView -> hostActivityName(webView.context) },
                 events = { name, attributes -> openTelemetryRum.emitEvent(name, attributes = attributes) },
+                loadTraces = { webViewId, origin ->
+                    val span =
+                        tracer
+                            .spanBuilder("webview.load")
+                            .setAttribute(WebViewContextBridge.WEBVIEW_ID, webViewId)
+                            .setAttribute(WebViewContextBridge.WEBVIEW_ORIGIN, origin)
+                            .startSpan()
+                    span.end()
+                    traceparentOf(span.spanContext)
+                },
             )
         if (sessionProvider is SessionPublisher) {
             sessionProvider.addObserver(bridge)

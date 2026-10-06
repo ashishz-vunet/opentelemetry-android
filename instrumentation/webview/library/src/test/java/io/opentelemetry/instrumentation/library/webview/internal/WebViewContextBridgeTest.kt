@@ -11,6 +11,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.opentelemetry.android.session.Session
 import io.opentelemetry.android.session.SessionProvider
 import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.SpanContext
+import io.opentelemetry.api.trace.TraceFlags
+import io.opentelemetry.api.trace.TraceState
 import io.opentelemetry.sdk.common.Clock
 import org.assertj.core.api.Assertions.assertThat
 import org.json.JSONObject
@@ -36,6 +39,8 @@ class WebViewContextBridgeTest {
     private val events = mutableListOf<Pair<String, Attributes>>()
     private val webView = WebView(ApplicationProvider.getApplicationContext())
     private var ids = 0
+    private var loads = 0
+    private val recordedLoads = mutableListOf<Pair<String, String>>()
 
     private fun bridge(config: WebViewHandoffConfig = WebViewHandoffConfig()) =
         WebViewContextBridge(
@@ -47,6 +52,10 @@ class WebViewContextBridgeTest {
             device = WebViewContext.DeviceInfo("Google", "Pixel 8", "14"),
             screenName = { "DashboardActivity" },
             events = { name, attributes -> events.add(name to attributes) },
+            loadTraces = { webViewId, origin ->
+                recordedLoads.add(webViewId to origin)
+                "00-${"1".repeat(32)}-${(++loads).toString().padStart(16, '0')}-01"
+            },
             newWebViewId = { "webview-${++ids}" },
         )
 
@@ -87,13 +96,78 @@ class WebViewContextBridgeTest {
     }
 
     @Test
-    fun `reloading the same origin and session registers nothing new`() {
+    fun `a second load of the same origin keeps the bridge and only replaces the script`() {
         val bridge = bridge()
         bridge.beforeLoad(webView, "https://bank.example.com/a")
         bridge.beforeLoad(webView, "https://bank.example.com/b")
 
-        assertThat(api.scripts).hasSize(1)
+        assertThat(api.listeners).hasSize(1)
         assertThat(api.removedListeners).isEqualTo(0)
+        assertThat(api.scripts).hasSize(2)
+        assertThat(api.scripts.first().removed).isTrue()
+    }
+
+    @Test
+    fun `each load is recorded and hands its traceparent to the page`() {
+        val bridge = bridge()
+        bridge.beforeLoad(webView, "https://bank.example.com/a")
+        bridge.beforeLoad(webView, "https://bank.example.com/b")
+
+        assertThat(recordedLoads)
+            .containsExactly("webview-1" to "https://bank.example.com", "webview-1" to "https://bank.example.com")
+        assertThat(contextOf(api.scripts.first().code).getString("traceparent"))
+            .isEqualTo("00-${"1".repeat(32)}-0000000000000001-01")
+        assertThat(contextOf(api.scripts.last().code).getString("traceparent"))
+            .isEqualTo("00-${"1".repeat(32)}-0000000000000002-01")
+    }
+
+    @Test
+    fun `loads are recorded on webviews without context support too`() {
+        api.supported = false
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+
+        assertThat(recordedLoads).hasSize(1)
+    }
+
+    @Test
+    fun `brumReady drops the traceparent for later navigations`() {
+        val bridge = bridge()
+        bridge.beforeLoad(webView, "https://bank.example.com/")
+        val listener = api.listeners.values.single()
+        val replies = mutableListOf<String>()
+
+        listener.onMessage("""{"type":"brumReady"}""", "https://bank.example.com", true) { replies.add(it) }
+
+        assertThat(api.scripts).hasSize(2)
+        assertThat(api.scripts.first().removed).isTrue()
+        assertThat(contextOf(api.scripts.last().code).has("traceparent")).isFalse()
+        assertThat(JSONObject(replies.single()).getJSONObject("context").has("traceparent")).isFalse()
+
+        listener.onMessage("""{"type":"brumReady"}""", "https://bank.example.com", true) { replies.add(it) }
+        assertThat(api.scripts).hasSize(2)
+    }
+
+    @Test
+    fun `session rotation drops the pending traceparent`() {
+        val bridge = bridge()
+        bridge.beforeLoad(webView, "https://bank.example.com/")
+
+        bridge.onSessionStarted(session(sessionB, startMillis = 20_000L), session(sessionA, 10_000L))
+
+        assertThat(contextOf(api.scripts.last().code).has("traceparent")).isFalse()
+    }
+
+    @Test
+    fun `formats a W3C traceparent from a span context`() {
+        val sampled =
+            SpanContext.create(
+                "0af7651916cd43dd8448eb211c80319c",
+                "b7ad6b7169203331",
+                TraceFlags.getSampled(),
+                TraceState.getDefault(),
+            )
+        assertThat(traceparentOf(sampled)).isEqualTo("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+        assertThat(traceparentOf(SpanContext.getInvalid())).isNull()
     }
 
     @Test
@@ -224,6 +298,7 @@ class WebViewContextBridgeTest {
                 device = WebViewContext.DeviceInfo("Google", "Pixel 8", "14"),
                 screenName = { null },
                 events = { _, _ -> },
+                loadTraces = { _, _ -> null },
             )
         bridge.refresh()
         assertThat(reads).isEqualTo(0)

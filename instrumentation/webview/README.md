@@ -32,13 +32,26 @@ A document-start script sets `window.__VUNET_CTX__` before any script of the pag
   "sampled": true,
   "app": { "id": "com.example.bank", "version": "2.1.0" },
   "device": { "manufacturer": "Google", "model": "Pixel 8", "os": "Android", "osVersion": "14" },
-  "host": { "platform": "android", "webviewId": "<uuid>", "parentViewName": "DashboardActivity" }
+  "host": { "platform": "android", "webviewId": "<uuid>", "parentViewName": "DashboardActivity" },
+  "traceparent": "00-<trace id>-<span id>-<flags>"
 }
 ```
 
 Fields may be added within `v: 1`; renaming or removing one needs a new version. The context lives
 in page memory only: nothing is written to cookies or web storage, so a reload or a new launch never
 picks up a stale session.
+
+### Trace of the page load
+
+Every rewritten page load is recorded as a `webview.load` span (attributes `webview.id`,
+`webview.origin`), a child of whatever span is current in the app, such as a tap. Its W3C
+`traceparent` is in the context of that page, so browser RUM can make the page's `documentLoad` its
+child: one trace then runs from the native action through the page load to the page's own requests.
+
+The `traceparent` is single-use. It is dropped from the context once the page sends `brumReady`,
+and when the session rotates, so a reload or a later navigation inside the page starts its own
+trace instead of joining an old one. Later clicks and requests in the page are separate traces, as
+in any browser.
 
 ### Bridge
 
