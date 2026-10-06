@@ -19,7 +19,11 @@ import io.opentelemetry.android.session.SessionPublisher
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.common.Clock
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter
+import io.opentelemetry.sdk.trace.SdkTracerProvider
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -109,6 +113,25 @@ class ContextBridgeTest {
     }
 
     @Test
+    fun pageLoadCarriesTheTraceparentOfTheNativeLoadSpan() {
+        load(server.url("/first-script").toString())
+
+        val ctx = JSONObject(takeBeacon(server, "/beacon/ctx").url.queryParameter("v")!!)
+        val loadSpan = rum.spans.finishedSpanItems.single { it.name == "webview.load" }
+        assertThat(ctx.getString("traceparent"))
+            .isEqualTo("00-${loadSpan.traceId}-${loadSpan.spanId}-${loadSpan.spanContext.traceFlags.asHex()}")
+        assertThat(loadSpan.attributes.get(AttributeKey.stringKey("webview.id")))
+            .isEqualTo(ctx.getJSONObject("host").getString("webviewId"))
+    }
+
+    @Test
+    fun navigationAfterBrumReadyHasNoTraceparent() {
+        load(server.url("/bridge-then-next").toString())
+
+        assertThat(takeBeacon(server, "/beacon/ctx").url.queryParameter("v")).doesNotContain("traceparent")
+    }
+
+    @Test
     fun anotherOriginNavigatedToFromThePageGetsNoContext() {
         val other = otherServer.url("/first-script").toString()
         load(server.url("/redirect?to=" + java.net.URLEncoder.encode(other, "UTF-8")).toString())
@@ -139,6 +162,9 @@ class ContextBridgeTest {
                                 "beacon('pushed',{callback:c.sessionId,global:window.__VUNET_CTX__.sessionId});}};" +
                                 "window.addEventListener('vunet:context',function(e){beacon('event',{v:e.detail.sessionId});});" +
                                 "beacon('ready',{});"
+                        "/bridge-then-next" ->
+                            "VunetBridge.onmessage=function(){location.href='/first-script';};" +
+                                "VunetBridge.postMessage(JSON.stringify({type:'brumReady'}));"
                         "/redirect" -> "location.href=" + JSONObject.quote(request.url.queryParameter("to")) + ";"
                         else -> ""
                     }
@@ -171,8 +197,14 @@ class ContextBridgeTest {
         private var current: Session = TestSession(SESSION_A)
         private val observers = CopyOnWriteArrayList<SessionObserver>()
         val events = CopyOnWriteArrayList<Pair<String, Attributes>>()
+        val spans: InMemorySpanExporter = InMemorySpanExporter.create()
 
-        override val openTelemetry: OpenTelemetry = OpenTelemetry.noop()
+        override val openTelemetry: OpenTelemetry =
+            OpenTelemetrySdk
+                .builder()
+                .setTracerProvider(
+                    SdkTracerProvider.builder().addSpanProcessor(SimpleSpanProcessor.create(spans)).build(),
+                ).build()
         override val sessionProvider: SessionProvider =
             object : SessionProvider, SessionPublisher {
                 override fun getSessionId(): String = current.id

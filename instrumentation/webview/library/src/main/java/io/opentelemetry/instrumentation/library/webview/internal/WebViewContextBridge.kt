@@ -13,6 +13,7 @@ import io.opentelemetry.android.session.SessionObserver
 import io.opentelemetry.android.session.SessionProvider
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.SpanContext
 import io.opentelemetry.sdk.common.Clock
 import org.json.JSONException
 import org.json.JSONObject
@@ -33,6 +34,10 @@ import java.util.concurrent.TimeUnit
  * fresh document-start script for later navigations and the loaded page gets the new context
  * pushed to `window.__VUNET_BRIDGE__.onContext`.
  *
+ * Each page load is also recorded as a `webview.load` span through [loadTraces], and its
+ * `traceparent` is handed to that page so browser RUM can continue the trace; it is dropped from
+ * the context once browser RUM reports `brumReady`.
+ *
  * WebViews are held weakly, so nothing needs to be detached. On WebViews without the required
  * `androidx.webkit` features only the `webview.opened` event is recorded, with
  * `webview.context.supported=false`.
@@ -46,6 +51,7 @@ internal class WebViewContextBridge(
     private val device: WebViewContext.DeviceInfo,
     private val screenName: (WebView) -> String?,
     private val events: WebViewEvents,
+    private val loadTraces: WebViewLoadTraces,
     private val newWebViewId: () -> String = { UUID.randomUUID().toString() },
 ) : SessionObserver {
     private val lock = Any()
@@ -63,16 +69,21 @@ internal class WebViewContextBridge(
             return
         }
         val attachment = attachmentFor(webView, origin)
+        val traceparent = loadTraces.recordLoad(attachment.id, origin.rule)
         if (!attachment.supported) {
             return
         }
         val session = currentSession() ?: return
+        attachment.pendingTraceparent = traceparent
         attachment.originRules.add(origin.rule)
         val rulesChanged = attachment.registeredRules != attachment.originRules
         if (rulesChanged) {
             registerListener(webView, attachment)
         }
-        if (rulesChanged || attachment.scriptSessionId != session.id) {
+        if (rulesChanged ||
+            attachment.scriptSessionId != session.id ||
+            attachment.scriptTraceparent != attachment.pendingTraceparent
+        ) {
             registerScript(webView, attachment, session)
         }
     }
@@ -137,7 +148,7 @@ internal class WebViewContextBridge(
         }
         val rules = attachment.originRules.toSet()
         api.addMessageListener(webView, ContextScripts.BRIDGE_NAME, rules) { message, _, isMainFrame, reply ->
-            onMessage(attachment, message, isMainFrame, reply)
+            onMessage(webView, attachment, message, isMainFrame, reply)
         }
         attachment.registeredRules = rules
     }
@@ -148,9 +159,11 @@ internal class WebViewContextBridge(
         session: SessionStart,
     ) {
         attachment.script?.remove()
-        val script = ContextScripts.documentStart(contextFor(attachment, session).toJson())
+        val traceparent = attachment.pendingTraceparent
+        val script = ContextScripts.documentStart(contextFor(attachment, session, traceparent).toJson())
         attachment.script = api.addDocumentStartScript(webView, script, attachment.registeredRules)
         attachment.scriptSessionId = session.id
+        attachment.scriptTraceparent = traceparent
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -163,6 +176,8 @@ internal class WebViewContextBridge(
             if (attachment.scriptSessionId == session.id) {
                 return
             }
+            // The pending page load belongs to the previous session's trace.
+            attachment.pendingTraceparent = null
             registerScript(webView, attachment, session)
             val loaded = WebOrigin.parse(api.currentUrl(webView)) ?: return
             if (loaded.rule in attachment.registeredRules) {
@@ -174,6 +189,7 @@ internal class WebViewContextBridge(
     }
 
     private fun onMessage(
+        webView: WebView,
         attachment: Attachment,
         message: String?,
         isMainFrame: Boolean,
@@ -195,6 +211,11 @@ internal class WebViewContextBridge(
         val session = currentSession() ?: return
         val context = contextFor(attachment, session)
         reply(JSONObject().put("type", "context").put("context", JSONObject(context.toJson())).toString())
+        if (type == MESSAGE_BRUM_READY && attachment.pendingTraceparent != null) {
+            // Browser RUM has read the traceparent; later navigations start their own traces.
+            attachment.pendingTraceparent = null
+            registerScript(webView, attachment, session)
+        }
         if (type == MESSAGE_BRUM_READY && attachment.brumAttachedSessionId != session.id) {
             attachment.brumAttachedSessionId = session.id
             events.emit(
@@ -211,6 +232,7 @@ internal class WebViewContextBridge(
     private fun contextFor(
         attachment: Attachment,
         session: SessionStart,
+        traceparent: String? = null,
     ): WebViewContext =
         WebViewContext(
             sessionId = session.id,
@@ -221,6 +243,7 @@ internal class WebViewContextBridge(
             device = device,
             webViewId = attachment.id,
             parentViewName = attachment.parentViewName,
+            traceparent = traceparent,
         )
 
     private fun currentSession(): SessionStart? {
@@ -255,6 +278,8 @@ internal class WebViewContextBridge(
         var script: RegisteredScript? = null
         var scriptSessionId: String? = null
         var brumAttachedSessionId: String? = null
+        var pendingTraceparent: String? = null
+        var scriptTraceparent: String? = null
     }
 
     /** An http(s) origin, rendered as an `androidx.webkit` allowed-origin rule. */
@@ -300,6 +325,21 @@ internal class WebViewContextBridge(
         val BRUM_VERSION: AttributeKey<String> = AttributeKey.stringKey("brum.version")
     }
 }
+
+/** Records a WebView page load as a span and returns its W3C `traceparent`, if any. */
+internal fun interface WebViewLoadTraces {
+    fun recordLoad(
+        webViewId: String,
+        origin: String,
+    ): String?
+}
+
+internal fun traceparentOf(spanContext: SpanContext): String? =
+    if (spanContext.isValid) {
+        "00-${spanContext.traceId}-${spanContext.spanId}-${spanContext.traceFlags.asHex()}"
+    } else {
+        null
+    }
 
 internal fun interface WebViewEvents {
     fun emit(

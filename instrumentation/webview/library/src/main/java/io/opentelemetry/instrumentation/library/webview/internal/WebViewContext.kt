@@ -18,9 +18,14 @@ import org.json.JSONObject
  *   "sampled": true,
  *   "app": { "id": "<package>", "version": "<versionName>" },
  *   "device": { "manufacturer": "...", "model": "...", "os": "Android", "osVersion": "14" },
- *   "host": { "platform": "android", "webviewId": "<uuid>", "parentViewName": "<screen>" }
+ *   "host": { "platform": "android", "webviewId": "<uuid>", "parentViewName": "<screen>" },
+ *   "traceparent": "00-<trace id>-<span id>-<flags>"
  * }
  * ```
+ *
+ * `traceparent` is the native `webview.load` span of the page load that was just requested, so
+ * browser RUM can make that page's `documentLoad` its child. It is only present until browser RUM
+ * reports `brumReady`, so later navigations and reloads do not join an old trace.
  *
  * Fields are only ever added within a version; renaming or removing one requires a new `v`.
  */
@@ -32,6 +37,7 @@ internal class WebViewContext(
     val device: DeviceInfo,
     val webViewId: String,
     val parentViewName: String?,
+    val traceparent: String? = null,
 ) {
     fun toJson(): String =
         JSONObject()
@@ -57,7 +63,8 @@ internal class WebViewContext(
                     .put("platform", "android")
                     .put("webviewId", webViewId)
                     .putOpt("parentViewName", parentViewName),
-            ).toString()
+            ).putOpt("traceparent", traceparent)
+            .toString()
 
     class AppInfo(
         val id: String,
