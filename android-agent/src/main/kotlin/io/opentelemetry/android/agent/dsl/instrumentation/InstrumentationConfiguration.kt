@@ -50,6 +50,9 @@ class InstrumentationConfiguration internal constructor(
     private val coil: CoilConfiguration by lazy {
         CoilConfiguration(config)
     }
+    private val webView: WebViewConfiguration by lazy {
+        WebViewConfiguration(config, instrumentationLoader)
+    }
 
     /**
      * Configures activity lifecycle instrumentation.
@@ -133,5 +136,12 @@ class InstrumentationConfiguration internal constructor(
      */
     fun coil(configure: CoilConfiguration.() -> Unit) {
         coil.configure()
+    }
+
+    /**
+     * Configures WebView session handoff instrumentation.
+     */
+    fun webView(configure: WebViewConfiguration.() -> Unit) {
+        webView.configure()
     }
 }
