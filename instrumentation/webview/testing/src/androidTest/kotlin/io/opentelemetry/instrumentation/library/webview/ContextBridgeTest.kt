@@ -68,8 +68,9 @@ class ContextBridgeTest {
             webViews.forEach { it.destroy() }
             instrumentation.uninstall(context, rum)
         }
-        server.close()
-        otherServer.close()
+        // Not started when the test was skipped in setUp.
+        if (::server.isInitialized) server.close()
+        if (::otherServer.isInitialized) otherServer.close()
     }
 
     @Test
@@ -175,16 +176,25 @@ class ContextBridgeTest {
             }
         }
 
+    /** Beacons that arrived before the one a test waited for; image requests can race. */
+    private val earlyBeacons = mutableMapOf<MockWebServer, MutableList<RecordedRequest>>()
+
     private fun takeBeacon(
         target: MockWebServer,
         path: String,
     ): RecordedRequest {
+        val early = earlyBeacons.getOrPut(target) { mutableListOf() }
+        early.firstOrNull { it.url.encodedPath == path }?.let {
+            early.remove(it)
+            return it
+        }
         while (true) {
             val request = target.takeRequest(TIMEOUT_SECONDS, TimeUnit.SECONDS)
             checkNotNull(request) { "no request for $path within ${TIMEOUT_SECONDS}s" }
             if (request.url.encodedPath == path) {
                 return request
             }
+            early.add(request)
         }
     }
 
