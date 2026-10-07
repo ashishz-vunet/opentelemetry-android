@@ -4,14 +4,19 @@ This fork publishes to **Maven Central** under `com.vunetsystems.agent.android`.
 
 ## Version lines
 
-| Type | Version example | Gradle flag | CI trigger |
-|------|-----------------|-------------|------------|
-| Snapshot | `0.0.1-SNAPSHOT` | default (no `-Pfinal=true`) | PR merged to `develop` |
-| Release | `0.0.1` | `-Pfinal=true` | push to `release/*` (e.g. after PR merge) |
+Same lanes and version rules as vuTelemetry-android, so the fork and the SDK ship one version train. The fork releases a version first; the SDK's preflight waits until that fork BOM is on Maven Central.
+
+| Branch | `version` in `gradle.properties` | Published on merge | Permanent |
+|--------|----------------------------------|--------------------|-----------|
+| `develop` | `x.y.z` | `x.y.z-SNAPSHOT` | no, overwritten |
+| `rc/*` | `x.y.z-rc.N` | `x.y.z-rc.N` + tag `vx.y.z-rc.N` + GitHub pre-release | yes |
+| `release/*` | `x.y.z` | `x.y.z` + tag `vx.y.z` + GitHub release | yes |
+
+Every PR into `rc/*` or `release/*` must carry a version that is not on Maven Central yet, so it bumps `version` (`1.0.0-rc.1` → `1.0.0-rc.2`). [`preflight.sh`](.github/scripts/preflight.sh) checks this on the PR and again before publishing; Central also refuses to overwrite a release. Nobody creates tags by hand: CI tags the commit it published.
 
 Configured in root [`gradle.properties`](gradle.properties):
 
-- `version=0.0.1` — base semver
+- `version=1.0.0-rc.1` — the version without `-SNAPSHOT`; `-Pfinal=true` publishes it as is
 - `otel.publish.alpha=false` — all modules share one version (no per-module `-alpha` suffix)
 
 ## Prerequisites
@@ -29,10 +34,11 @@ Repository secrets for GitHub Actions: `SONATYPE_USER`, `SONATYPE_KEY`, `GPG_PRI
 
 | Workflow | Trigger | Publishes |
 |----------|---------|-----------|
-| [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | PR merged to `develop` | `0.0.1-SNAPSHOT` |
-| [Release](.github/workflows/release.yml) | push to `release/**` | `0.0.1` (with version bump check) |
+| [PR build](.github/workflows/pr-check.yaml) | every PR | nothing; runs `preflight` against the PR's base branch, then `check` |
+| [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | PR merged to `develop` (or manual run) | `x.y.z-SNAPSHOT` |
+| [Release](.github/workflows/release.yml) | push (merge) to `rc/**` or `release/**` | `verify` (preflight + `check`), then `publish` after approval: the release, the tag and the GitHub release |
 
-Manual fallback: both workflows support `workflow_dispatch`.
+`publish` runs in the `maven-central` environment: one of its required reviewers (`ashishz-vunet`, `gopal-vunet`, `sid-vunet`) approves in the Actions run before anything is uploaded. The environment must have those required reviewers set (Settings → Environments); without them GitHub creates it unprotected and the publish runs unapproved.
 
 ## Local verification before publish
 
@@ -62,7 +68,7 @@ Do **not** run `closeAndReleaseSonatypeStagingRepository` for snapshots.
 ```bash
 export CI=true
 
-.github/scripts/verify-version-greater-than-central.sh
+PREFLIGHT_BRANCH=rc/1.0 bash .github/scripts/preflight.sh
 
 ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository \
   -Pfinal=true \
