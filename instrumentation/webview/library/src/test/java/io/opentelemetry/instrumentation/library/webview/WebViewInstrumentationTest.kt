@@ -49,7 +49,7 @@ class WebViewInstrumentationTest {
         assertThat(api.scripts).isEmpty()
 
         WebViewSubstitutions.loadUrl(webView, "https://bank.example.com/")
-        assertThat(api.scripts.single().rules).containsExactly("https://bank.example.com")
+        assertThat(api.scripts.single().rules).containsExactly("http://bank.example.com", "https://bank.example.com")
         assertThat(api.scripts.single().code).contains(sessionId).contains(application.packageName)
         assertThat(events).containsExactly("webview.opened")
     }

@@ -75,8 +75,14 @@ session, so an inactivity rotation that is due is pushed then.
 
 ### Scope
 
-The script and the bridge are limited to the origins the app loaded (plus `allowedHosts`), so a
-page navigated to another site does not see them. Only `http`/`https` URLs are handled. If anything
+The script and the bridge are limited to the origins the app loaded (plus `allowedHosts`, over both
+http and https), so a page navigated to another site does not see them. A redirect to a host the
+app did not load itself, e.g. `bank.example.com` to `login.bank.example.com`, only gets the context
+when that host is in `allowedHosts`; otherwise browser RUM there keeps its own session.
+
+`host.parentViewName` is the fragment that hosts the WebView when there is one (the name the
+fragment instrumentation reports as `screen.name`), otherwise its activity. It is refreshed on every
+page load, so a WebView reused on another screen reports that screen. Only `http`/`https` URLs are handled. If anything
 fails, the page loads exactly as it would without the instrumentation.
 
 ### Events
@@ -121,8 +127,9 @@ OpenTelemetryRumInitializer.initialize(context = applicationContext) {
     instrumentations {
         webView {
             // Default: the origin of every http(s) page the app loads. List every host a
-            // journey redirects through, such as an OAuth host.
-            allowedHosts("id.example.com", "oauth.example.com")
+            // journey redirects through, such as an OAuth host. A port restricts the entry to
+            // that port; without one any port matches.
+            allowedHosts("id.example.com", "oauth.example.com:8443")
         }
     }
 }

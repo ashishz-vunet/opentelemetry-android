@@ -11,6 +11,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.View
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.common.RumDiagnostics
@@ -67,7 +70,7 @@ class WebViewInstrumentation internal constructor(
                 config = WebViewHandoffConfig(allowedHosts),
                 app = appInfo(context),
                 device = WebViewContext.DeviceInfo(Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE),
-                screenName = { webView -> hostActivityName(webView.context) },
+                screenName = { webView -> hostFragmentName(webView) ?: hostActivityName(webView.context) },
                 events = { name, attributes -> openTelemetryRum.emitEvent(name, attributes = attributes) },
                 loadTraces = { webViewId, origin ->
                     val span =
@@ -93,6 +96,15 @@ class WebViewInstrumentation internal constructor(
         lifecycleCallbacks = callbacks
         WebViewSessionHandoff.install(bridge)
     }
+
+    /** The same name the fragment instrumentation reports as `screen.name` for that screen. */
+    private fun hostFragmentName(view: View): String? =
+        try {
+            FragmentManager.findFragment<Fragment>(view).javaClass.simpleName
+        } catch (_: IllegalStateException) {
+            // Not inside a fragment, or not attached to its view hierarchy yet.
+            null
+        }
 
     private tailrec fun hostActivityName(context: Context?): String? =
         when (context) {
