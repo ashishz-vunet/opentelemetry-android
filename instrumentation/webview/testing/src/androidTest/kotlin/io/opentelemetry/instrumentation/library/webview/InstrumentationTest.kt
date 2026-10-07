@@ -62,7 +62,8 @@ class InstrumentationTest {
             webViews.forEach { it.destroy() }
             instrumentation.uninstall(context, rum)
         }
-        server.close()
+        // Not started when the test was skipped in setUp.
+        if (::server.isInitialized) server.close()
     }
 
     @Test
