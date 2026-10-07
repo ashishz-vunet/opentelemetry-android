@@ -5,7 +5,7 @@
 
 package io.opentelemetry.instrumentation.library.webview.internal
 
-import android.net.Uri
+import androidx.core.net.toUri
 import android.webkit.WebView
 import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.session.Session
@@ -65,10 +65,12 @@ internal class WebViewContextBridge(
         url: String?,
     ) {
         val origin = WebOrigin.parse(url) ?: return
-        if (config.allowedHosts.isNotEmpty() && origin.host !in config.allowedHosts) {
+        if (config.allowedHosts.isNotEmpty() && config.allowedHosts.none { it.matches(origin) }) {
             return
         }
         val attachment = attachmentFor(webView, origin)
+        // A WebView can move between screens, e.g. when it is pooled and reused.
+        screenName(webView)?.let { attachment.parentViewName = it }
         val traceparent = loadTraces.recordLoad(attachment.id, origin.rule)
         if (!attachment.supported) {
             return
@@ -123,7 +125,7 @@ internal class WebViewContextBridge(
         synchronized(lock) {
             attachments[webView]?.let { return it }
             created = Attachment(newWebViewId(), screenName(webView), api.isSupported())
-            config.allowedHosts.forEach { created.originRules.add(WebOrigin(origin.scheme, it, -1).rule) }
+            config.allowedHosts.forEach { created.originRules.addAll(it.rules()) }
             attachments[webView] = created
         }
         events.emit(
@@ -270,7 +272,7 @@ internal class WebViewContextBridge(
     /** Mutated only on the WebView's thread, except for construction under [lock]. */
     private class Attachment(
         val id: String,
-        val parentViewName: String?,
+        var parentViewName: String?,
         val supported: Boolean,
     ) {
         val originRules = linkedSetOf<String>()
@@ -288,19 +290,25 @@ internal class WebViewContextBridge(
         val host: String,
         private val port: Int,
     ) {
+        val effectivePort: Int
+            get() = if (port != -1) port else if (scheme == "https") HTTPS_PORT else HTTP_PORT
+
         val rule: String
             get() {
-                val defaultPort = if (scheme == "https") 443 else 80
+                val defaultPort = if (scheme == "https") HTTPS_PORT else HTTP_PORT
                 val portPart = if (port == -1 || port == defaultPort) "" else ":$port"
                 return "$scheme://$host$portPart"
             }
 
         companion object {
+            private const val HTTP_PORT = 80
+            private const val HTTPS_PORT = 443
+
             fun parse(url: String?): WebOrigin? {
                 if (url.isNullOrEmpty()) {
                     return null
                 }
-                val uri = Uri.parse(url)
+                val uri = url.toUri()
                 val scheme = uri.scheme?.lowercase() ?: return null
                 if (scheme != "http" && scheme != "https") {
                     return null

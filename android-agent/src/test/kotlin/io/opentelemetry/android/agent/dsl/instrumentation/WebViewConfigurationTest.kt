@@ -25,11 +25,11 @@ internal class WebViewConfigurationTest {
 
         configuration.instrumentations {
             webView {
-                allowedHosts("id.example.com", "oauth.example.com")
+                allowedHosts("id.example.com", "oauth.example.com:8443")
             }
         }
 
-        assertThat(instrumentation.receivedHosts).containsExactlyInAnyOrder("id.example.com", "oauth.example.com")
+        assertThat(instrumentation.receivedHosts).containsExactlyInAnyOrder("id.example.com", "oauth.example.com:8443")
     }
 
     @Test
@@ -45,11 +45,19 @@ internal class WebViewConfigurationTest {
     }
 
     @Test
-    fun `allowedHosts rejects urls and blanks`() {
+    fun `allowedHosts rejects urls, paths, bad ports and blanks`() {
         val configuration =
             OpenTelemetryConfiguration(clock = FakeClock(), instrumentationLoader = FakeInstrumentationLoader())
 
-        listOf("https://bank.example.com", "bank.example.com/login", "bank.example.com:443", " ").forEach { host ->
+        listOf(
+            "https://bank.example.com",
+            "bank.example.com/login",
+            "bank.example.com:",
+            "bank.example.com:0",
+            "bank.example.com:70000",
+            "bank.example.com:https",
+            " ",
+        ).forEach { host ->
             assertThatThrownBy {
                 configuration.instrumentations { webView { allowedHosts(host) } }
             }.isInstanceOf(IllegalArgumentException::class.java)

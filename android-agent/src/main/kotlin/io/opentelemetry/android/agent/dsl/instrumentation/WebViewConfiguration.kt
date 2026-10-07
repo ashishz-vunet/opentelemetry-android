@@ -29,14 +29,16 @@ class WebViewConfiguration internal constructor(
     }
 
     /**
-     * Restricts the session context to these exact hosts, e.g. `"bank.example.com"`. By default
-     * the origin of every http(s) page the app loads into a WebView receives it. List every host a
+     * Restricts the session context to these exact hosts, e.g. `"bank.example.com"`, optionally
+     * with a port, e.g. `"bank.example.com:8443"` (without one, any port matches). By default the
+     * origin of every http(s) page the app loads into a WebView receives it. List every host a
      * journey redirects through (such as an OAuth host) so the session survives the redirect.
      */
     fun allowedHosts(vararg hosts: String) {
         hosts.forEach { host ->
-            require(host.isNotBlank() && host.none { it == '/' || it == ':' || it.isWhitespace() }) {
-                "allowedHosts takes bare hosts such as \"bank.example.com\", but was \"$host\"."
+            require(HOST_PATTERN.matches(host) && host.substringAfter(':', "1").toInt() in 1..MAX_PORT) {
+                "allowedHosts takes hosts such as \"bank.example.com\" or \"bank.example.com:8443\", " +
+                    "without a scheme or path, but was \"$host\"."
             }
         }
         webViewInstrumentation?.setAllowedHosts(hosts.toSet())
@@ -52,5 +54,7 @@ class WebViewConfiguration internal constructor(
 
     private companion object {
         private const val WEBVIEW_INSTRUMENTATION_NAME = "webview"
+        private const val MAX_PORT = 65535
+        private val HOST_PATTERN = Regex("[^/:\\s]+(:\\d{1,5})?")
     }
 }

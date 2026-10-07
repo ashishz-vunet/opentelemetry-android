@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":instrumentation:android-instrumentation"))
     implementation(project(":agent-api"))
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.fragment)
 
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)

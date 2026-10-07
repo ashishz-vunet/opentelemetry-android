@@ -39,6 +39,7 @@ class WebViewContextBridgeTest {
     private val events = mutableListOf<Pair<String, Attributes>>()
     private val webView = WebView(ApplicationProvider.getApplicationContext())
     private var ids = 0
+    private var screen: String? = "DashboardActivity"
     private var loads = 0
     private val recordedLoads = mutableListOf<Pair<String, String>>()
 
@@ -50,7 +51,7 @@ class WebViewContextBridgeTest {
             config = config,
             app = WebViewContext.AppInfo("com.example.bank", "2.1.0"),
             device = WebViewContext.DeviceInfo("Google", "Pixel 8", "14"),
-            screenName = { "DashboardActivity" },
+            screenName = { screen },
             events = { name, attributes -> events.add(name to attributes) },
             loadTraces = { webViewId, origin ->
                 recordedLoads.add(webViewId to origin)
@@ -193,7 +194,62 @@ class WebViewContextBridgeTest {
         assertThat(events).isEmpty()
 
         bridge.beforeLoad(webView, "https://bank.example.com/")
-        assertThat(api.scripts.single().rules).containsExactly("https://bank.example.com", "https://id.example.com")
+        assertThat(api.scripts.single().rules).containsExactly(
+            "http://bank.example.com",
+            "https://bank.example.com",
+            "http://id.example.com",
+            "https://id.example.com",
+        )
+    }
+
+    @Test
+    fun `an allowed host with a port matches only that port`() {
+        val bridge = bridge(WebViewHandoffConfig(allowedHosts = setOf("bank.example.com:8443")))
+        bridge.beforeLoad(webView, "https://bank.example.com/")
+        assertThat(api.scripts).isEmpty()
+
+        bridge.beforeLoad(webView, "https://bank.example.com:8443/")
+        assertThat(api.scripts.single().rules)
+            .containsExactly("http://bank.example.com:8443", "https://bank.example.com:8443")
+    }
+
+    @Test
+    fun `an allowed host without a port matches any port`() {
+        val bridge = bridge(WebViewHandoffConfig(allowedHosts = setOf("bank.example.com")))
+        bridge.beforeLoad(webView, "http://bank.example.com:8080/")
+
+        assertThat(api.scripts.single().rules)
+            .containsExactly("http://bank.example.com", "https://bank.example.com", "http://bank.example.com:8080")
+    }
+
+    @Test
+    fun `a first http load still covers a redirect to https on another allowed host`() {
+        val bridge = bridge(WebViewHandoffConfig(allowedHosts = setOf("bank.example.com", "id.example.com")))
+        bridge.beforeLoad(webView, "http://bank.example.com/")
+
+        assertThat(api.scripts.single().rules).contains("https://id.example.com")
+    }
+
+    @Test
+    fun `parses allowed hosts`() {
+        assertThat(AllowedHost.parse("Bank.Example.com:8443")?.let { it.host to it.port })
+            .isEqualTo("bank.example.com" to 8443)
+        assertThat(AllowedHost.parse("bank.example.com")?.port).isNull()
+        listOf("", "bank.example.com:", "bank.example.com:0", "bank.example.com:x", "a/b").forEach {
+            assertThat(AllowedHost.parse(it)).describedAs(it).isNull()
+        }
+    }
+
+    @Test
+    fun `the parent screen follows the webview to the screen that loads it`() {
+        val bridge = bridge()
+        bridge.beforeLoad(webView, "https://bank.example.com/a")
+        screen = "CardsFragment"
+        bridge.beforeLoad(webView, "https://bank.example.com/b")
+
+        assertThat(contextOf(api.scripts.last().code).getJSONObject("host").getString("parentViewName"))
+            .isEqualTo("CardsFragment")
+        assertThat(events.single().second.get(WebViewContextBridge.PARENT_VIEW_NAME)).isEqualTo("DashboardActivity")
     }
 
     @Test
