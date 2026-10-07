@@ -64,10 +64,11 @@ afterEvaluate {
                     }
                 }
                 pom {
-                    val repoUrl = "https://github.com/vunetsystems/opentelemetry-android"
-                    name.set("OpenTelemetry Android")
-                    description.set(project.description)
-                    url.set(repoUrl)
+                    // Public metadata on Maven Central: VuNet branding, no link to this repo.
+                    val websiteUrl = "https://vunetsystems.com"
+                    name.set("VuNet Android Agent")
+                    description.set(project.description?.replace("OpenTelemetry", "VuNet"))
+                    url.set(websiteUrl)
                     licenses {
                         license {
                             name.set("The Apache Software License, Version 2.0")
@@ -75,17 +76,18 @@ afterEvaluate {
                         }
                     }
                     scm {
-                        val scmUrl = "scm:git:git@github.com:vunetsystems/opentelemetry-android.git"
+                        // Central requires all three; same private repo as the SDK's POM.
+                        val scmUrl = "scm:git:git@github.com:vunetsystems/vutelemetry-android.git"
                         connection.set(scmUrl)
                         developerConnection.set(scmUrl)
-                        url.set(repoUrl)
+                        url.set(websiteUrl)
                         tag.set("HEAD")
                     }
                     developers {
                         developer {
                             id.set("vunetsystems")
                             name.set("VuNet Systems")
-                            url.set("https://github.com/vunetsystems")
+                            url.set(websiteUrl)
                         }
                     }
                 }
@@ -101,11 +103,24 @@ afterEvaluate {
     }
 }
 
+// Published under the VuNet SDK's group as parts of agent-android, so no coordinate says
+// "opentelemetry". Instrumentations keep their names under "<group>.instrumentation".
+val coreArtifactIds = mapOf(
+    ":opentelemetry-android-bom" to "agent-android-bom",
+    ":android-agent" to "agent-android-runtime",
+    ":core" to "agent-android-core",
+    ":common" to "agent-android-common",
+    ":agent-api" to "agent-android-api",
+    ":services" to "agent-android-services",
+    ":session" to "agent-android-session",
+)
+
 fun computeArtifactId(path: String): String {
     val projectName = project.name
     if (!path.startsWith(":instrumentation:")) {
-        // Return default artifactId for non auto-instrumentation publications.
-        return projectName
+        // A new core module must be named here, or it would publish under its bare project name.
+        return coreArtifactIds[path]
+            ?: throw IllegalStateException("No published artifactId for '$path'; add it to coreArtifactIds")
     }
 
     val match = Regex("^:instrumentation:([^:]+)(:[^:]+)?\$").matchEntire(path)

@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 new_version=$(.github/scripts/get-version.sh)
-metadata_url="https://repo1.maven.org/maven2/com/vunetsystems/opentelemetry/android/android-agent/maven-metadata.xml"
+metadata_url="https://repo1.maven.org/maven2/com/vunetsystems/agent/android/agent-android-runtime/maven-metadata.xml"
 
 echo "Checking release version '$new_version' against Maven Central..."
 

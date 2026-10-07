@@ -4,20 +4,23 @@ This document addresses versioning and release considerations for this fork.
 
 ## VuNet fork — Maven Central versioning
 
-This fork (`com.vunetsystems.opentelemetry.android`) uses a single published version for
+This fork (published as `com.vunetsystems.agent.android`) uses a single published version for
 **every** module so consumers can align dependencies with one BOM coordinate.
 
 ### Published coordinates
 
 | Role | Maven coordinate (snapshot) |
 |------|-----------------------------|
-| BOM | `com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT` |
-| Agent entry | `com.vunetsystems.opentelemetry.android:android-agent:0.0.1-SNAPSHOT` |
-| Instrumentation | `com.vunetsystems.opentelemetry.android.instrumentation:<artifact>:0.0.1-SNAPSHOT` |
+| BOM | `com.vunetsystems.agent.android:agent-android-bom:1.0.0-rc.1-SNAPSHOT` |
+| Agent entry | `com.vunetsystems.agent.android:agent-android-runtime:1.0.0-rc.1-SNAPSHOT` |
+| Other core modules | `com.vunetsystems.agent.android:agent-android-{core,common,api,services,session}` |
+| Instrumentation | `com.vunetsystems.agent.android.instrumentation:<artifact>:1.0.0-rc.1-SNAPSHOT` |
 
-Releases use the same coordinates without `-SNAPSHOT` (e.g. `0.0.1`).
+Releases use the same coordinates without `-SNAPSHOT` (e.g. `1.0.0-rc.1`).
 
-Repository: [Maven Central](https://central.sonatype.com/artifact/com.vunetsystems.opentelemetry.android/android-agent)
+Published under the VuNet SDK's group: core modules are `com.vunetsystems.agent.android:agent-android-*` and instrumentations `com.vunetsystems.agent.android.instrumentation:<artifact>`. Six modules are built but not published: `android-log-agent`, `android-log-library`, `compose-click`, `okhttp3-websocket-agent`, `okhttp3-websocket-library`, `view-click` (nothing in the SDK uses them).
+
+Repository: [Maven Central](https://central.sonatype.com/artifact/com.vunetsystems.agent.android/agent-android-runtime)
 
 The [vuTelemetry-android](https://github.com/vunetsystems/vutelemetry-android) SDK and Gradle plugin
 should pin the same BOM version when building against this fork.

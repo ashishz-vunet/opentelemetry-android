@@ -1,16 +1,16 @@
 # Maven Central publishing and consumption
 
-This fork publishes artifacts to Maven Central under `com.vunetsystems.opentelemetry.android`.
+This fork publishes artifacts to Maven Central under `com.vunetsystems.agent.android`. Published under the VuNet SDK's group: core modules are `com.vunetsystems.agent.android:agent-android-*` and instrumentations `com.vunetsystems.agent.android.instrumentation:<artifact>`. Six modules are built but not published: `android-log-agent`, `android-log-library`, `compose-click`, `okhttp3-websocket-agent`, `okhttp3-websocket-library`, `view-click` (nothing in the SDK uses them).
 
 ## Published coordinates
 
 | Role | Maven coordinate |
 |------|------------------|
-| BOM | `com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT` |
-| Agent entry | `com.vunetsystems.opentelemetry.android:android-agent` |
-| Instrumentation | `com.vunetsystems.opentelemetry.android.instrumentation:<artifact>` |
+| BOM | `com.vunetsystems.agent.android:agent-android-bom:1.0.0-rc.1-SNAPSHOT` |
+| Agent entry | `com.vunetsystems.agent.android:agent-android-runtime` |
+| Instrumentation | `com.vunetsystems.agent.android.instrumentation:<artifact>` |
 
-Replace `0.0.1-SNAPSHOT` with a release version (e.g. `0.0.1`) for non-snapshot builds.
+Replace `1.0.0-rc.1-SNAPSHOT` with a release version (e.g. `1.0.0-rc.1`) for non-snapshot builds.
 
 ## Consuming in Android apps
 
@@ -26,8 +26,8 @@ repositories {
 }
 
 dependencies {
-    api(platform("com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1-SNAPSHOT"))
-    implementation("com.vunetsystems.opentelemetry.android:android-agent")
+    api(platform("com.vunetsystems.agent.android:agent-android-bom:1.0.0-rc.1-SNAPSHOT"))
+    implementation("com.vunetsystems.agent.android:agent-android-runtime")
 }
 ```
 
@@ -40,8 +40,8 @@ repositories {
 }
 
 dependencies {
-    api(platform("com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:0.0.1"))
-    implementation("com.vunetsystems.opentelemetry.android:android-agent")
+    api(platform("com.vunetsystems.agent.android:agent-android-bom:1.0.0-rc.1"))
+    implementation("com.vunetsystems.agent.android:agent-android-runtime")
 }
 ```
 
@@ -52,10 +52,10 @@ Use the BOM so all modules share the same version without listing each explicitl
 Remove GitHub Packages repository and `gpr.*` credentials. Pin the BOM from Maven Central instead:
 
 ```kotlin
-api(platform("com.vunetsystems.opentelemetry.android:opentelemetry-android-bom:<version>"))
+api(platform("com.vunetsystems.agent.android:agent-android-bom:<version>"))
 ```
 
-Update `vunet.stack.version` / OTel BOM pin to match the published BOM version.
+Update `vunetStackVersion` in vuTelemetry-android's `gradle/libs.versions.toml` to match the published BOM version.
 
 ## Publishing (maintainers)
 
