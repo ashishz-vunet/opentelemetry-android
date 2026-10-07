@@ -88,7 +88,7 @@ This instrumentation is **not** bundled with `android-agent`. Add it as an expli
 dependency:
 
 ```kotlin
-implementation("com.vunetsystems.opentelemetry.android.instrumentation:system-metrics:1.0.0")
+implementation("com.vunetsystems.agent.android.instrumentation:system-metrics:1.0.0")
 ```
 
 Because the instrumentation is discovered at runtime via `ServiceLoader` (`@AutoService`),

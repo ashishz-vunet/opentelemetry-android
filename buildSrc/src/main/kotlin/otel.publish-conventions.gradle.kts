@@ -101,11 +101,24 @@ afterEvaluate {
     }
 }
 
+// Published under the VuNet SDK's group as parts of agent-android, so no coordinate says
+// "opentelemetry". Instrumentations keep their names under "<group>.instrumentation".
+val coreArtifactIds = mapOf(
+    ":opentelemetry-android-bom" to "agent-android-bom",
+    ":android-agent" to "agent-android-runtime",
+    ":core" to "agent-android-core",
+    ":common" to "agent-android-common",
+    ":agent-api" to "agent-android-api",
+    ":services" to "agent-android-services",
+    ":session" to "agent-android-session",
+)
+
 fun computeArtifactId(path: String): String {
     val projectName = project.name
     if (!path.startsWith(":instrumentation:")) {
-        // Return default artifactId for non auto-instrumentation publications.
-        return projectName
+        // A new core module must be named here, or it would publish under its bare project name.
+        return coreArtifactIds[path]
+            ?: throw IllegalStateException("No published artifactId for '$path'; add it to coreArtifactIds")
     }
 
     val match = Regex("^:instrumentation:([^:]+)(:[^:]+)?\$").matchEntire(path)

@@ -1,6 +1,6 @@
 # Releasing
 
-This fork publishes all artifacts to **Maven Central** under `com.vunetsystems.opentelemetry.android`.
+This fork publishes to **Maven Central** under `com.vunetsystems.agent.android`. Published under the VuNet SDK's group: core modules are `com.vunetsystems.agent.android:agent-android-*` and instrumentations `com.vunetsystems.agent.android.instrumentation:<artifact>`. Six modules are built but not published: `android-log-agent`, `android-log-library`, `compose-click`, `okhttp3-websocket-agent`, `okhttp3-websocket-library`, `view-click` (nothing in the SDK uses them).
 
 ## Version lines
 
@@ -74,13 +74,13 @@ export CI=true
 Snapshots (wait ~15–30 min):
 
 ```bash
-curl -s "https://central.sonatype.com/repository/maven-snapshots/com/vunetsystems/opentelemetry/android/android-agent/maven-metadata.xml"
+curl -s "https://central.sonatype.com/repository/maven-snapshots/com/vunetsystems/agent/android/agent-android-runtime/maven-metadata.xml"
 ```
 
 Releases:
 
 ```bash
-curl -s "https://repo1.maven.org/maven2/com/vunetsystems/opentelemetry/android/android-agent/maven-metadata.xml"
+curl -s "https://repo1.maven.org/maven2/com/vunetsystems/agent/android/agent-android-runtime/maven-metadata.xml"
 ```
 
 ## Consumer coordinates

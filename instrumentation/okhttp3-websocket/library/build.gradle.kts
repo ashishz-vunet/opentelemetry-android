@@ -1,6 +1,5 @@
 plugins {
     id("otel.android-library-conventions")
-    id("otel.publish-conventions")
 }
 
 description = "OpenTelemetry OkHttp Websocket library instrumentation for Android"
