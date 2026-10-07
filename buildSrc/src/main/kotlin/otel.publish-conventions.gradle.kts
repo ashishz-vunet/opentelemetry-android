@@ -64,10 +64,11 @@ afterEvaluate {
                     }
                 }
                 pom {
-                    val repoUrl = "https://github.com/vunetsystems/opentelemetry-android"
-                    name.set("OpenTelemetry Android")
-                    description.set(project.description)
-                    url.set(repoUrl)
+                    // Public metadata on Maven Central: VuNet branding, no link to this repo.
+                    val websiteUrl = "https://vunetsystems.com"
+                    name.set("VuNet Android Agent")
+                    description.set(project.description?.replace("OpenTelemetry", "VuNet"))
+                    url.set(websiteUrl)
                     licenses {
                         license {
                             name.set("The Apache Software License, Version 2.0")
@@ -75,17 +76,18 @@ afterEvaluate {
                         }
                     }
                     scm {
-                        val scmUrl = "scm:git:git@github.com:vunetsystems/opentelemetry-android.git"
+                        // Central requires all three; same private repo as the SDK's POM.
+                        val scmUrl = "scm:git:git@github.com:vunetsystems/vutelemetry-android.git"
                         connection.set(scmUrl)
                         developerConnection.set(scmUrl)
-                        url.set(repoUrl)
+                        url.set(websiteUrl)
                         tag.set("HEAD")
                     }
                     developers {
                         developer {
                             id.set("vunetsystems")
                             name.set("VuNet Systems")
-                            url.set("https://github.com/vunetsystems")
+                            url.set(websiteUrl)
                         }
                     }
                 }
