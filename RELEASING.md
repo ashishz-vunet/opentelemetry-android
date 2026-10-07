@@ -38,7 +38,7 @@ Repository secrets for GitHub Actions: `SONATYPE_USER`, `SONATYPE_KEY`, `GPG_PRI
 | [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | PR merged to `develop` (or manual run) | `x.y.z-SNAPSHOT` |
 | [Release](.github/workflows/release.yml) | push (merge) to `rc/**` or `release/**` | `verify` (preflight + `check`), then `publish` after approval: the release, the tag and the GitHub release |
 
-`publish` runs in the `maven-central` environment: one of its required reviewers (`ashishz-vunet`, `gopal-vunet`, `sid-vunet`) approves in the Actions run before anything is uploaded. The environment must have those required reviewers set (Settings → Environments); without them GitHub creates it unprotected and the publish runs unapproved.
+`publish` runs in the `maven-central` environment: one of its required reviewers (`ashishz-vunet`, `gopal-vunet`, `ganeshnk-vunet`, `sid-vunet`) approves in the Actions run before anything is uploaded. The environment exists with those required reviewers (Settings → Environments); do not delete it: a missing environment is recreated unprotected and the publish would run unapproved.
 
 ## Local verification before publish
 
