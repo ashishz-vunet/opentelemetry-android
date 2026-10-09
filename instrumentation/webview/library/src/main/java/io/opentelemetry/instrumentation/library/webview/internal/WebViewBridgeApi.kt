@@ -9,6 +9,7 @@ import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.webkit.CookieManager
 import android.webkit.WebView
 import androidx.annotation.RequiresApi
 import androidx.webkit.WebViewCompat
@@ -50,6 +51,12 @@ internal interface WebViewBridgeApi {
     fun post(
         webView: WebView,
         action: Runnable,
+    )
+
+    /** Sets [cookie] (a `Set-Cookie` value) for [url] in the shared WebView cookie store. */
+    fun setCookie(
+        url: String,
+        cookie: String,
     )
 }
 
@@ -121,6 +128,13 @@ internal object AndroidWebViewBridgeApi : WebViewBridgeApi {
         val looper =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) looperOf(webView) else Looper.getMainLooper()
         Handler(looper).post(action)
+    }
+
+    override fun setCookie(
+        url: String,
+        cookie: String,
+    ) {
+        CookieManager.getInstance().setCookie(url, cookie)
     }
 
     @RequiresApi(Build.VERSION_CODES.P)

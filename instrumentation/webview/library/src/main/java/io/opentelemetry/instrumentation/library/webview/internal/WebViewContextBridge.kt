@@ -7,6 +7,8 @@ package io.opentelemetry.instrumentation.library.webview.internal
 
 import androidx.core.net.toUri
 import android.webkit.WebView
+import io.opentelemetry.android.HybridClickExclusions
+import io.opentelemetry.android.WebViewHandoff
 import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.session.Session
 import io.opentelemetry.android.session.SessionObserver
@@ -27,20 +29,24 @@ import java.util.concurrent.TimeUnit
  * [beforeLoad] runs from the woven page-load calls, before the page starts loading. The first time
  * it sees a WebView it attaches to it:
  * - a document-start script sets `window.__VUNET_CTX__` before any page script runs;
- * - a `VunetBridge` message listener answers `getContext` and records `brumReady`.
+ * - a `VunetBridge` message listener answers `getContext`, records `brumReady`, keeps the session
+ *   alive on `activity`, and reports `setUser`, `clearUser` and `setSessionProp` to the
+ *   [WebViewHandoff.Host];
+ * - the WebView is excluded from hybrid click instrumentation, since browser RUM records the taps.
  *
  * Both are limited to the origins the app itself loaded (or the configured allowed hosts), and
  * only main-frame messages are answered. When the session rotates, every attached WebView gets a
  * fresh document-start script for later navigations and the loaded page gets the new context
- * pushed to `window.__VUNET_BRIDGE__.onContext`.
+ * pushed to `window.__VUNET_BRIDGE__.onContext`. The same happens when the host identity changes
+ * ([identityChanged]).
  *
  * Each page load is also recorded as a `webview.load` span through [loadTraces], and its
  * `traceparent` is handed to that page so browser RUM can continue the trace; it is dropped from
  * the context once browser RUM reports `brumReady`.
  *
- * WebViews are held weakly, so nothing needs to be detached. On WebViews without the required
- * `androidx.webkit` features only the `webview.opened` event is recorded, with
- * `webview.context.supported=false`.
+ * WebViews are held weakly, so nothing needs to be detached. WebViews without the required
+ * `androidx.webkit` features get the session id through browser RUM's session cookie instead, and
+ * `webview.opened` records `webview.context.supported=false`.
  */
 internal class WebViewContextBridge(
     private val sessionProvider: SessionProvider,
@@ -53,7 +59,9 @@ internal class WebViewContextBridge(
     private val events: WebViewEvents,
     private val loadTraces: WebViewLoadTraces,
     private val newWebViewId: () -> String = { UUID.randomUUID().toString() },
-) : SessionObserver {
+    private val host: () -> WebViewHandoff.Host? = { WebViewHandoff.host },
+) : SessionObserver,
+    WebViewHandoff.Runtime {
     private val lock = Any()
     private val attachments = WeakHashMap<WebView, Attachment>()
 
@@ -69,15 +77,44 @@ internal class WebViewContextBridge(
             return
         }
         val attachment = attachmentFor(webView, origin)
-        // A WebView can move between screens, e.g. when it is pooled and reused.
-        screenName(webView)?.let { attachment.parentViewName = it }
         val traceparent = loadTraces.recordLoad(attachment.id, origin.rule)
+        val session = currentSession() ?: return
+        if (!attachment.supported) {
+            // Session id only; a rotation reaches the page with its next native load.
+            api.setCookie(origin.rule, sessionCookie(origin, session))
+            return
+        }
+        attachment.pendingTraceparent = traceparent
+        attachment.originRules.add(origin.rule)
+        register(webView, attachment, session)
+    }
+
+    /** Attaches without a page load, for WebViews whose loads are not rewritten. */
+    override fun attach(webView: WebView) {
+        if (config.allowedHosts.isEmpty()) {
+            RumDiagnostics.w { "webview: attach() needs allowedHosts; ignored" }
+            return
+        }
+        val attachment = attachmentFor(webView, null)
         if (!attachment.supported) {
             return
         }
         val session = currentSession() ?: return
-        attachment.pendingTraceparent = traceparent
-        attachment.originRules.add(origin.rule)
+        register(webView, attachment, session)
+    }
+
+    override fun identityChanged() {
+        val session = currentSession() ?: return
+        supportedAttachments().forEach { (webView, attachment) ->
+            api.post(webView) { push(webView, attachment, session) }
+        }
+    }
+
+    private fun register(
+        webView: WebView,
+        attachment: Attachment,
+        session: SessionStart,
+    ) {
         val rulesChanged = attachment.registeredRules != attachment.originRules
         if (rulesChanged) {
             registerListener(webView, attachment)
@@ -107,11 +144,13 @@ internal class WebViewContextBridge(
         if (!isUsable(session.id)) {
             return
         }
-        val attached = synchronized(lock) { attachments.entries.filter { it.value.supported }.map { it.key to it.value } }
-        attached.forEach { (webView, attachment) ->
+        supportedAttachments().forEach { (webView, attachment) ->
             api.post(webView) { pushSession(webView, attachment, session) }
         }
     }
+
+    private fun supportedAttachments(): List<Pair<WebView, Attachment>> =
+        synchronized(lock) { attachments.entries.filter { it.value.supported }.map { it.key to it.value } }
 
     override fun onSessionEnded(session: Session) {
         // The replacement session is pushed by onSessionStarted.
@@ -119,21 +158,27 @@ internal class WebViewContextBridge(
 
     private fun attachmentFor(
         webView: WebView,
-        origin: WebOrigin,
+        origin: WebOrigin?,
     ): Attachment {
         val created: Attachment
         synchronized(lock) {
-            attachments[webView]?.let { return it }
+            attachments[webView]?.let { existing ->
+                // A WebView can move between screens, e.g. when it is pooled and reused.
+                screenName(webView)?.let { existing.parentViewName = it }
+                return existing
+            }
             created = Attachment(newWebViewId(), screenName(webView), api.isSupported())
             config.allowedHosts.forEach { created.originRules.addAll(it.rules()) }
             attachments[webView] = created
         }
+        // Browser RUM records taps inside the page with the element actually tapped.
+        HybridClickExclusions.exclude(webView)
         events.emit(
             "webview.opened",
             Attributes
                 .builder()
                 .put(WEBVIEW_ID, created.id)
-                .put(WEBVIEW_ORIGIN, origin.rule)
+                .apply { origin?.let { put(WEBVIEW_ORIGIN, it.rule) } }
                 .put(WEBVIEW_CONTEXT_SUPPORTED, created.supported)
                 .apply { created.parentViewName?.let { put(PARENT_VIEW_NAME, it) } }
                 .build(),
@@ -168,25 +213,37 @@ internal class WebViewContextBridge(
         attachment.scriptTraceparent = traceparent
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private fun pushSession(
         webView: WebView,
         attachment: Attachment,
         session: SessionStart,
     ) {
+        if (attachment.scriptSessionId == session.id) {
+            return
+        }
+        // The pending page load belongs to the previous session's trace.
+        attachment.pendingTraceparent = null
+        push(webView, attachment, session)
+    }
+
+    /** Replaces the script for later navigations and the context of the loaded page. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun push(
+        webView: WebView,
+        attachment: Attachment,
+        session: SessionStart,
+    ) {
         try {
-            if (attachment.scriptSessionId == session.id) {
+            if (attachment.registeredRules.isEmpty()) {
                 return
             }
-            // The pending page load belongs to the previous session's trace.
-            attachment.pendingTraceparent = null
             registerScript(webView, attachment, session)
             val loaded = WebOrigin.parse(api.currentUrl(webView)) ?: return
-            if (loaded.rule in attachment.registeredRules) {
+            if (loaded.rule in attachment.registeredRules || config.allowedHosts.any { it.matches(loaded) }) {
                 api.evaluate(webView, ContextScripts.push(contextFor(attachment, session).toJson()))
             }
         } catch (t: Throwable) {
-            RumDiagnostics.w({ "webview: failed to push the rotated session" }, t)
+            RumDiagnostics.w({ "webview: failed to push the session context" }, t)
         }
     }
 
@@ -206,19 +263,38 @@ internal class WebViewContextBridge(
             } catch (_: JSONException) {
                 return
             }
-        val type = request.optString("type")
-        if (type != MESSAGE_GET_CONTEXT && type != MESSAGE_BRUM_READY) {
-            return
+        when (request.optString("type")) {
+            MESSAGE_GET_CONTEXT -> answer(webView, attachment, request, reply, brumReady = false)
+            MESSAGE_BRUM_READY -> answer(webView, attachment, request, reply, brumReady = true)
+            MESSAGE_ACTIVITY -> sessionProvider.getSessionId()
+            MESSAGE_SET_USER -> request.text("id")?.let { id -> toHost { it.setUser(id, request.text("userType")) } }
+            MESSAGE_CLEAR_USER -> toHost { it.clearUser() }
+            MESSAGE_SET_SESSION_PROP -> {
+                val key = request.text("key")
+                val value = request.text("value")
+                if (key != null && value != null) {
+                    toHost { it.setSessionProperty(key, value) }
+                }
+            }
         }
+    }
+
+    private fun answer(
+        webView: WebView,
+        attachment: Attachment,
+        request: JSONObject,
+        reply: (String) -> Unit,
+        brumReady: Boolean,
+    ) {
         val session = currentSession() ?: return
         val context = contextFor(attachment, session)
         reply(JSONObject().put("type", "context").put("context", JSONObject(context.toJson())).toString())
-        if (type == MESSAGE_BRUM_READY && attachment.pendingTraceparent != null) {
+        if (brumReady && attachment.pendingTraceparent != null) {
             // Browser RUM has read the traceparent; later navigations start their own traces.
             attachment.pendingTraceparent = null
             registerScript(webView, attachment, session)
         }
-        if (type == MESSAGE_BRUM_READY && attachment.brumAttachedSessionId != session.id) {
+        if (brumReady && attachment.brumAttachedSessionId != session.id) {
             attachment.brumAttachedSessionId = session.id
             events.emit(
                 "webview.brum_attached",
@@ -231,12 +307,46 @@ internal class WebViewContextBridge(
         }
     }
 
+    /** Page values are untrusted: strings only, trimmed, non-blank, at most [MAX_VALUE_LENGTH]. */
+    private fun JSONObject.text(name: String): String? =
+        (opt(name) as? String)?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_VALUE_LENGTH }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun toHost(call: (WebViewHandoff.Host) -> Unit) {
+        val current = host() ?: return
+        try {
+            call(current)
+        } catch (t: Throwable) {
+            RumDiagnostics.w({ "webview: host rejected a page message" }, t)
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun identity(): WebViewHandoff.Identity? =
+        try {
+            host()?.identity()
+        } catch (t: Throwable) {
+            RumDiagnostics.w({ "webview: failed to read the host identity" }, t)
+            null
+        }
+
+    private fun sessionCookie(
+        origin: WebOrigin,
+        session: SessionStart,
+    ): String {
+        val now = TimeUnit.NANOSECONDS.toMillis(clock.now())
+        val secure = if (origin.scheme == "https") "; Secure" else ""
+        // Browser RUM's stored format: <session id>-<last activity ms>-<start ms>.
+        return "$SESSION_COOKIE=${session.id}-$now-${session.startMillis}; Path=/; SameSite=Lax$secure"
+    }
+
     private fun contextFor(
         attachment: Attachment,
         session: SessionStart,
         traceparent: String? = null,
-    ): WebViewContext =
-        WebViewContext(
+    ): WebViewContext {
+        val identity = identity()
+        return WebViewContext(
             sessionId = session.id,
             sessionStartMillis = session.startMillis,
             // Every session is recorded natively; there is no session sampling to mirror yet.
@@ -246,7 +356,11 @@ internal class WebViewContextBridge(
             webViewId = attachment.id,
             parentViewName = attachment.parentViewName,
             traceparent = traceparent,
+            userId = identity?.userId,
+            userType = identity?.userType,
+            sessionProps = identity?.sessionProperties.orEmpty(),
         )
+    }
 
     private fun currentSession(): SessionStart? {
         val sessionId = sessionProvider.getSessionId()
@@ -325,6 +439,12 @@ internal class WebViewContextBridge(
     companion object {
         const val MESSAGE_GET_CONTEXT = "getContext"
         const val MESSAGE_BRUM_READY = "brumReady"
+        const val MESSAGE_ACTIVITY = "activity"
+        const val MESSAGE_SET_USER = "setUser"
+        const val MESSAGE_CLEAR_USER = "clearUser"
+        const val MESSAGE_SET_SESSION_PROP = "setSessionProp"
+        const val MAX_VALUE_LENGTH = 128
+        private const val SESSION_COOKIE = "vunetRumSessionId"
 
         val WEBVIEW_ID: AttributeKey<String> = AttributeKey.stringKey("webview.id")
         val WEBVIEW_ORIGIN: AttributeKey<String> = AttributeKey.stringKey("webview.origin")
