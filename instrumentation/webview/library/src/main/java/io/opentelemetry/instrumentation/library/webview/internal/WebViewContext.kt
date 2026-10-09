@@ -19,9 +19,14 @@ import org.json.JSONObject
  *   "app": { "id": "<package>", "version": "<versionName>" },
  *   "device": { "manufacturer": "...", "model": "...", "os": "Android", "osVersion": "14" },
  *   "host": { "platform": "android", "webviewId": "<uuid>", "parentViewName": "<screen>" },
+ *   "user": { "id": "<user id>", "type": "<user type>" },
+ *   "sessionProps": { "<key>": "<value>" },
  *   "traceparent": "00-<trace id>-<span id>-<flags>"
  * }
  * ```
+ *
+ * `user` and `sessionProps` are absent while there is no user or no session property; a page drops
+ * its copy when a pushed context no longer has them.
  *
  * `traceparent` is the native `webview.load` span of the page load that was just requested, so
  * browser RUM can make that page's `documentLoad` its child. It is only present until browser RUM
@@ -38,6 +43,9 @@ internal class WebViewContext(
     val webViewId: String,
     val parentViewName: String?,
     val traceparent: String? = null,
+    val userId: String? = null,
+    val userType: String? = null,
+    val sessionProps: Map<String, String> = emptyMap(),
 ) {
     fun toJson(): String =
         JSONObject()
@@ -64,7 +72,14 @@ internal class WebViewContext(
                     .put("webviewId", webViewId)
                     .putOpt("parentViewName", parentViewName),
             ).putOpt("traceparent", traceparent)
-            .toString()
+            .apply {
+                if (userId != null || userType != null) {
+                    put("user", JSONObject().putOpt("id", userId).putOpt("type", userType))
+                }
+                if (sessionProps.isNotEmpty()) {
+                    put("sessionProps", JSONObject(sessionProps))
+                }
+            }.toString()
 
     class AppInfo(
         val id: String,

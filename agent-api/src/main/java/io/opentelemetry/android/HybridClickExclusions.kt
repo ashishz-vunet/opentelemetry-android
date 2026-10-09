@@ -49,11 +49,18 @@ object HybridClickExclusions {
         val loc = IntArray(2)
         synchronized(views) {
             for (v in views) {
-                if (v.rootView !== root || v.visibility != View.VISIBLE || v.width == 0 || v.height == 0) continue
+                if (v.rootView !== root || !v.isVisibleWithSize()) continue
                 v.getLocationInWindow(loc)
-                if (x >= loc[0] && x < loc[0] + v.width && y >= loc[1] && y < loc[1] + v.height) return true
+                if (x.inSpan(loc[0], v.width) && y.inSpan(loc[1], v.height)) return true
             }
         }
         return false
     }
+
+    private fun View.isVisibleWithSize(): Boolean = visibility == View.VISIBLE && width > 0 && height > 0
+
+    private fun Float.inSpan(
+        start: Int,
+        size: Int,
+    ): Boolean = this >= start && this < start + size
 }

@@ -25,11 +25,12 @@ internal class WebViewConfigurationTest {
 
         configuration.instrumentations {
             webView {
-                allowedHosts("id.example.com", "oauth.example.com:8443")
+                allowedHosts("id.example.com", "oauth.example.com:8443", "*.offers.example.com")
             }
         }
 
-        assertThat(instrumentation.receivedHosts).containsExactlyInAnyOrder("id.example.com", "oauth.example.com:8443")
+        assertThat(instrumentation.receivedHosts)
+            .containsExactlyInAnyOrder("id.example.com", "oauth.example.com:8443", "*.offers.example.com")
     }
 
     @Test
@@ -57,6 +58,9 @@ internal class WebViewConfigurationTest {
             "bank.example.com:70000",
             "bank.example.com:https",
             " ",
+            "*",
+            "*.",
+            "a.*.example.com",
         ).forEach { host ->
             assertThatThrownBy {
                 configuration.instrumentations { webView { allowedHosts(host) } }

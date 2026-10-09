@@ -33,6 +33,8 @@ A document-start script sets `window.__VUNET_CTX__` before any script of the pag
   "app": { "id": "com.example.bank", "version": "2.1.0" },
   "device": { "manufacturer": "Google", "model": "Pixel 8", "os": "Android", "osVersion": "14" },
   "host": { "platform": "android", "webviewId": "<uuid>", "parentViewName": "DashboardActivity" },
+  "user": { "id": "C1234", "type": "premium" },
+  "sessionProps": { "flow.name": "loan" },
   "traceparent": "00-<trace id>-<span id>-<flags>"
 }
 ```
@@ -66,6 +68,27 @@ VunetBridge.postMessage(JSON.stringify({ type: "brumReady", version: "3.2.0" }))
 
 Both requests are answered with `{"type":"context","context":{...}}`.
 
+### Identity
+
+`user` and `sessionProps` come from `WebViewHandoff.host` (in `agent-api`), which the app or a
+wrapper SDK sets; both are absent while there is no user or property. After the host identity
+changes, call `WebViewHandoff.identityChanged()`: every attached WebView gets a fresh script and its
+loaded page gets the new context pushed, as on a session rotation.
+
+A page reports identity changes back on the bridge:
+
+```js
+VunetBridge.postMessage(JSON.stringify({ type: "setUser", id: "C1234", userType: "premium" }));
+VunetBridge.postMessage(JSON.stringify({ type: "clearUser" }));
+VunetBridge.postMessage(JSON.stringify({ type: "setSessionProp", key: "flow.name", value: "loan" }));
+VunetBridge.postMessage(JSON.stringify({ type: "activity" })); // keeps the session alive
+```
+
+They are passed to `WebViewHandoff.Host` only from the main frame of an allowed origin, and only
+with string values that are non-blank after trimming and at most 128 characters. The host decides
+what to accept (for example, which property keys) and what a sign-out does. These messages get no
+reply.
+
 ### Session rotation
 
 When the session rotates, later navigations get the new context, and the loaded page has
@@ -95,11 +118,16 @@ fails, the page loads exactly as it would without the instrumentation.
 ## Limitations
 
 * WebViews without `DOCUMENT_START_SCRIPT` and `WEB_MESSAGE_LISTENER` get no context; they are
-  reported with `webview.context.supported=false`.
+  reported with `webview.context.supported=false`. Instead, browser RUM's `vunetRumSessionId`
+  cookie is set for each page they load, which carries the session id only; a rotation reaches the
+  page with its next load from the app.
 * Calls inside third-party libraries (for example a payment SDK's own WebView) are not rewritten.
+  When the app can reach that WebView, `WebViewHandoff.attach(webView)` before its first load
+  hands it the context for the allowed hosts (it requires `allowedHosts`, and records no
+  `webview.load` span).
 * Browser RUM must read `window.__VUNET_CTX__` and listen for `onContext` to join the session.
 * `sampled` is always `true`: every native session is recorded.
-* User id is not part of the context yet, and a WebView renderer crash is not reported yet.
+* A WebView renderer crash is not reported yet.
 
 ## Installation
 
@@ -129,7 +157,7 @@ OpenTelemetryRumInitializer.initialize(context = applicationContext) {
             // Default: the origin of every http(s) page the app loads. List every host a
             // journey redirects through, such as an OAuth host. A port restricts the entry to
             // that port; without one any port matches.
-            allowedHosts("id.example.com", "oauth.example.com:8443")
+            allowedHosts("id.example.com", "oauth.example.com:8443", "*.offers.example.com")
         }
     }
 }

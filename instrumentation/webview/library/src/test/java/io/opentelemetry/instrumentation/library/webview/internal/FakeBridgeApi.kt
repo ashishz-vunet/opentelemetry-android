@@ -22,6 +22,7 @@ internal open class FakeBridgeApi : WebViewBridgeApi {
     val listeners = linkedMapOf<Set<String>, BridgeMessageListener>()
     var removedListeners = 0
     val evaluated = mutableListOf<String>()
+    val cookies = mutableListOf<Pair<String, String>>()
 
     override fun isSupported(): Boolean = supported
 
@@ -66,5 +67,12 @@ internal open class FakeBridgeApi : WebViewBridgeApi {
         action: Runnable,
     ) {
         action.run()
+    }
+
+    override fun setCookie(
+        url: String,
+        cookie: String,
+    ) {
+        cookies.add(url to cookie)
     }
 }

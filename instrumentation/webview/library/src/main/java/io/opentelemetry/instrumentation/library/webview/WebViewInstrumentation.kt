@@ -15,6 +15,7 @@ import android.view.View
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import com.google.auto.service.AutoService
+import io.opentelemetry.android.WebViewHandoff
 import io.opentelemetry.android.OpenTelemetryRum
 import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
@@ -95,6 +96,7 @@ class WebViewInstrumentation internal constructor(
         (context as? Application)?.registerActivityLifecycleCallbacks(callbacks)
         lifecycleCallbacks = callbacks
         WebViewSessionHandoff.install(bridge)
+        WebViewHandoff.runtime = bridge
     }
 
     /** The same name the fragment instrumentation reports as `screen.name` for that screen. */
@@ -134,5 +136,6 @@ class WebViewInstrumentation internal constructor(
         lifecycleCallbacks?.let { (context as? Application)?.unregisterActivityLifecycleCallbacks(it) }
         lifecycleCallbacks = null
         WebViewSessionHandoff.uninstall()
+        WebViewHandoff.runtime = null
     }
 }

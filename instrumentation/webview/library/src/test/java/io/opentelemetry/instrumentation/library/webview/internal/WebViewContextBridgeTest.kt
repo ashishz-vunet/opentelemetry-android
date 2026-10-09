@@ -8,6 +8,8 @@ package io.opentelemetry.instrumentation.library.webview.internal
 import android.webkit.WebView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.opentelemetry.android.HybridClickExclusions
+import io.opentelemetry.android.WebViewHandoff
 import io.opentelemetry.android.session.Session
 import io.opentelemetry.android.session.SessionProvider
 import io.opentelemetry.api.common.Attributes
@@ -28,7 +30,8 @@ class WebViewContextBridgeTest {
 
     private var currentSessionId = sessionA
     private var nowMillis = 10_000L
-    private val sessionProvider = SessionProvider { currentSessionId }
+    private var sessionReads = 0
+    private val sessionProvider = SessionProvider { sessionReads++.let { currentSessionId } }
     private val clock =
         object : Clock {
             override fun now(): Long = TimeUnit.MILLISECONDS.toNanos(nowMillis)
@@ -42,6 +45,7 @@ class WebViewContextBridgeTest {
     private var screen: String? = "DashboardActivity"
     private var loads = 0
     private val recordedLoads = mutableListOf<Pair<String, String>>()
+    private val host = FakeHost()
 
     private fun bridge(config: WebViewHandoffConfig = WebViewHandoffConfig()) =
         WebViewContextBridge(
@@ -58,6 +62,7 @@ class WebViewContextBridgeTest {
                 "00-${"1".repeat(32)}-${(++loads).toString().padStart(16, '0')}-01"
             },
             newWebViewId = { "webview-${++ids}" },
+            host = { host },
         )
 
     @Test
@@ -373,6 +378,174 @@ class WebViewContextBridgeTest {
             .isEqualTo("http://10.0.2.2:8090")
         assertThat(WebViewContextBridge.WebOrigin.parse("http://[::1]:8080/")).isNull()
         assertThat(WebViewContextBridge.WebOrigin.parse("about:blank")).isNull()
+    }
+
+    @Test
+    fun `a wildcard host covers subdomains but not the apex`() {
+        val bridge = bridge(WebViewHandoffConfig(allowedHosts = setOf("*.example.com")))
+        bridge.beforeLoad(webView, "https://example.com/")
+        assertThat(api.scripts).isEmpty()
+
+        bridge.beforeLoad(webView, "https://offers.example.com/")
+        assertThat(api.scripts.single().rules)
+            .contains("http://*.example.com", "https://*.example.com", "https://offers.example.com")
+    }
+
+    @Test
+    fun `parses wildcard hosts and rejects other stars`() {
+        val parsed = AllowedHost.parse("*.Example.com:8443")
+        assertThat(parsed?.let { Triple(it.host, it.port, it.subdomains) }).isEqualTo(Triple("example.com", 8443, true))
+        listOf("*", "*.", "a.*.com", "**.example.com").forEach {
+            assertThat(AllowedHost.parse(it)).describedAs(it).isNull()
+        }
+    }
+
+    @Test
+    fun `the context carries the host identity and omits it when there is none`() {
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+        val anonymous = contextOf(api.scripts.single().code)
+        assertThat(anonymous.has("user")).isFalse()
+        assertThat(anonymous.has("sessionProps")).isFalse()
+
+        host.identity = WebViewHandoff.Identity("C1234", "premium", mapOf("flow.name" to "loan"))
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+        val context = contextOf(api.scripts.last().code)
+        assertThat(context.getJSONObject("user").getString("id")).isEqualTo("C1234")
+        assertThat(context.getJSONObject("user").getString("type")).isEqualTo("premium")
+        assertThat(context.getJSONObject("sessionProps").getString("flow.name")).isEqualTo("loan")
+    }
+
+    @Test
+    fun `identity messages from the main frame reach the host`() {
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+        val listener = api.listeners.values.single()
+        fun send(message: String) = listener.onMessage(message, "https://bank.example.com", true) {}
+
+        send("""{"type":"setUser","id":" C1234 ","userType":"premium"}""")
+        send("""{"type":"setSessionProp","key":"flow.name","value":"loan"}""")
+        send("""{"type":"clearUser"}""")
+
+        assertThat(host.calls).containsExactly("setUser C1234 premium", "setSessionProperty flow.name loan", "clearUser")
+    }
+
+    @Test
+    fun `identity messages from sub frames or with bad values are ignored`() {
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+        val listener = api.listeners.values.single()
+
+        listener.onMessage("""{"type":"setUser","id":"C1234"}""", "https://bank.example.com", false) {}
+        listOf(
+            """{"type":"setUser"}""",
+            """{"type":"setUser","id":"  "}""",
+            """{"type":"setUser","id":42}""",
+            """{"type":"setUser","id":"${"x".repeat(129)}"}""",
+            """{"type":"setSessionProp","key":"flow.name"}""",
+        ).forEach { listener.onMessage(it, "https://bank.example.com", true) {} }
+
+        assertThat(host.calls).isEmpty()
+    }
+
+    @Test
+    fun `a throwing host does not break the bridge`() {
+        host.fail = true
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+        val listener = api.listeners.values.single()
+
+        listener.onMessage("""{"type":"clearUser"}""", "https://bank.example.com", true) {}
+
+        assertThat(contextOf(api.scripts.single().code).getString("sessionId")).isEqualTo(sessionA)
+    }
+
+    @Test
+    fun `activity reads the session without replying`() {
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+        val listener = api.listeners.values.single()
+        val before = sessionReads
+        val replies = mutableListOf<String>()
+
+        listener.onMessage("""{"type":"activity"}""", "https://bank.example.com", true) { replies.add(it) }
+
+        assertThat(sessionReads).isEqualTo(before + 1)
+        assertThat(replies).isEmpty()
+    }
+
+    @Test
+    fun `an identity change refreshes the script and pushes to the loaded page`() {
+        val bridge = bridge()
+        bridge.beforeLoad(webView, "https://bank.example.com/")
+        api.loadedUrl = "https://bank.example.com/home"
+
+        host.identity = WebViewHandoff.Identity(userId = "C1234")
+        bridge.identityChanged()
+
+        assertThat(api.scripts.first().removed).isTrue()
+        assertThat(contextOf(api.scripts.last().code).getJSONObject("user").getString("id")).isEqualTo("C1234")
+        assertThat(contextOf(api.scripts.last().code).getString("traceparent")).isNotEmpty()
+        assertThat(api.evaluated.single()).contains("C1234")
+    }
+
+    @Test
+    fun `attach registers the allowed hosts without a page load`() {
+        bridge(WebViewHandoffConfig(allowedHosts = setOf("bank.example.com"))).attach(webView)
+
+        assertThat(recordedLoads).isEmpty()
+        assertThat(api.scripts.single().rules).containsExactly("http://bank.example.com", "https://bank.example.com")
+        assertThat(contextOf(api.scripts.single().code).has("traceparent")).isFalse()
+        assertThat(events.single().second.get(WebViewContextBridge.WEBVIEW_ORIGIN)).isNull()
+    }
+
+    @Test
+    fun `attach needs allowed hosts`() {
+        bridge().attach(webView)
+
+        assertThat(api.scripts).isEmpty()
+        assertThat(events).isEmpty()
+    }
+
+    @Test
+    fun `attached webviews are excluded from hybrid clicks`() {
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+
+        assertThat(HybridClickExclusions.isExcluded(webView)).isTrue()
+    }
+
+    @Test
+    fun `unsupported webviews get the session cookie instead`() {
+        api.supported = false
+        bridge().beforeLoad(webView, "https://bank.example.com/")
+
+        assertThat(api.cookies).containsExactly(
+            "https://bank.example.com" to "vunetRumSessionId=$sessionA-10000-10000; Path=/; SameSite=Lax; Secure",
+        )
+    }
+
+    private class FakeHost : WebViewHandoff.Host {
+        var identity = WebViewHandoff.Identity()
+        var fail = false
+        val calls = mutableListOf<String>()
+
+        override fun identity(): WebViewHandoff.Identity = identity
+
+        override fun setUser(
+            id: String,
+            type: String?,
+        ) {
+            check(!fail)
+            calls.add("setUser $id $type")
+        }
+
+        override fun clearUser() {
+            check(!fail)
+            calls.add("clearUser")
+        }
+
+        override fun setSessionProperty(
+            key: String,
+            value: String,
+        ) {
+            check(!fail)
+            calls.add("setSessionProperty $key $value")
+        }
     }
 
     private fun contextOf(script: String): JSONObject {
