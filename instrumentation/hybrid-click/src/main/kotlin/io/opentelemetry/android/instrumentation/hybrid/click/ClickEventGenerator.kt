@@ -13,6 +13,7 @@ import android.view.ViewConfiguration
 import android.view.Window
 import io.opentelemetry.android.common.RumConstants
 import io.opentelemetry.android.common.RumDiagnostics
+import io.opentelemetry.android.HybridClickExclusions
 import io.opentelemetry.android.common.internal.instrumentation.ActiveInteractionContext
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_CONTROL_SELECTION_MODE
 import io.opentelemetry.android.instrumentation.hybrid.click.shared.ATTR_CONTROL_END_DATE
@@ -206,6 +207,9 @@ internal class ClickEventGenerator(
         }
 
         ActiveInteractionContext.clear()
+
+        // Another layer (e.g. a web RUM SDK in a WebView) records this tap with the real element.
+        if (HybridClickExclusions.contains(window.decorView, event.x, event.y)) return
 
         val target = resolveTarget(window, event.x, event.y) ?: return
         emitSpan(target, gestureType)

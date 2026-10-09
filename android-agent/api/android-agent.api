@@ -132,6 +132,7 @@ public final class io/opentelemetry/android/agent/dsl/instrumentation/Instrument
 	public final fun screenOrientation (Lkotlin/jvm/functions/Function1;)V
 	public final fun slowRenderingReporter (Lkotlin/jvm/functions/Function1;)V
 	public final fun systemMetrics (Lkotlin/jvm/functions/Function1;)V
+	public final fun webView (Lkotlin/jvm/functions/Function1;)V
 }
 
 public final class io/opentelemetry/android/agent/dsl/instrumentation/NetworkMonitoringConfiguration : io/opentelemetry/android/agent/dsl/instrumentation/CanBeEnabledAndDisabled {
@@ -151,6 +152,11 @@ public final class io/opentelemetry/android/agent/dsl/instrumentation/SlowRender
 
 public final class io/opentelemetry/android/agent/dsl/instrumentation/SystemMetricsConfiguration : io/opentelemetry/android/agent/dsl/instrumentation/CanBeEnabledAndDisabled {
 	public final fun collectionIntervalSeconds (J)V
+	public fun enabled (Z)V
+}
+
+public final class io/opentelemetry/android/agent/dsl/instrumentation/WebViewConfiguration : io/opentelemetry/android/agent/dsl/instrumentation/CanBeEnabledAndDisabled {
+	public final fun allowedHosts ([Ljava/lang/String;)V
 	public fun enabled (Z)V
 }
 

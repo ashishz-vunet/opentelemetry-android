@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Added
+
+- WebView session handoff (`webview-library` + `webview-agent`): pages loaded by the app's own
+  `WebView.loadUrl` / `postUrl` / `loadDataWithBaseURL` calls receive the RUM session as
+  `window.__VUNET_CTX__` and a `VunetBridge` channel, limited to the loaded origins or
+  `webView { allowedHosts(...) }` (`*.example.com` for subdomains). Each load is a `webview.load`
+  span whose `traceparent` the page can continue.
+- `WebViewHandoff` (`agent-api`): the app's user id, user type and session properties go into the
+  page context, and pages report `setUser`, `clearUser` and `setSessionProp` back to
+  `WebViewHandoff.host`. `WebViewHandoff.attach(webView)` covers WebViews whose loads are not
+  rewritten. WebViews without document-start script support get browser RUM's session cookie
+  instead.
+- `HybridClickExclusions` (`agent-api`): taps inside excluded views produce no `ui.interaction`.
+  WebViews attached by the handoff are excluded, since browser RUM records those taps.
+
 ### Fixed
 
 - `ActionSummarySpanExporter` no longer overwrites a `semantic.summary` a span already carries.
