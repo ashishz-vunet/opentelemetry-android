@@ -39,15 +39,21 @@ android-agent          (opinionated setup: core + default instrumentations + Kot
 
 Key points:
 
-- **`android-agent`** is the batteries-included entry point. It bundles `core` plus all default
-  instrumentations and provides a Kotlin DSL for configuration. Most end-user-facing features
-  are already wired here.
+- **`android-agent`** is the batteries-included entry point. It bundles `core` plus a **curated**
+  set of default instrumentations (listed under `// Default instrumentations:` in
+  `android-agent/build.gradle.kts`) and provides a Kotlin DSL for configuration. Other modules
+  under `instrumentation/*` are **opt-in** unless added there explicitly — for example
+  **`instrumentation/navigation-view`**, **`instrumentation/navigation-compose-nav2`**, **`instrumentation/navigation-compose-nav3`** (navigation spans),
+  **`instrumentation/view-click`**, **`instrumentation/compose/click`**, **`instrumentation/hybrid-click`**, and the separate **agent**
+  artifacts for okhttp3, httpurlconnection, android-log, and **concurrency** (coroutine/executor/Handler
+  context propagation). Add the dependency you need when
+  integrating with `core` only, or when extending the agent’s classpath.
 - **`core`** configures the OTel Java SDK (TracerProvider, MeterProvider, LoggerProvider).
   It uses `OpenTelemetryRumBuilder` and `SdkPreconfiguredRumBuilder` for two initialization paths.
 - **`instrumentation/*`** modules each implement the `AndroidInstrumentation` interface and are
-  discovered at runtime via `@AutoService`. Some instrumentations (okhttp3, compose,
-  httpurlconnection, android-log) require **bytecode weaving** via a ByteBuddy Gradle plugin —
-  they cannot work as simple runtime dependencies.
+  discovered at runtime via `@AutoService` when the artifact is on the classpath. Some
+  instrumentations (okhttp3, compose, httpurlconnection, android-log) require **bytecode weaving**
+  via a ByteBuddy Gradle plugin — they cannot work as simple runtime dependencies.
 - **`session`** already provides `SessionProvider`, `SessionPublisher`, and `SessionObserver`.
   Session IDs are already injected into spans via processors in `core`.
 
@@ -91,6 +97,11 @@ Any change to the public API surface is detected by `apiCheck` and requires extr
   code that is unrelated to the current task. This includes comments — do not reword, add, or remove
   comments that are not directly related to the PR's goal. If a line is not functionally
   affected by the proposed change, leave it exactly as-is.
+- **Keep Gradle/plugin/runtime parity for instrumentation changes.** Whenever adding or changing
+  instrumentation modules, names, or configuration knobs in `android-agent` / `instrumentation/*`,
+  update any dependent Gradle plugin and runtime wiring in the same change (DSL blocks, resolved
+  config/codegen, dependency wiring, initializer mapping, and tests). Do not ship instrumentation
+  features that are unreachable from consumer configuration surfaces.
 - Preserve the surrounding code's style and idioms.
 - Do not add redundant comments that just narrate what the code does.
 
@@ -106,6 +117,7 @@ Any change to the public API surface is detected by `apiCheck` and requires extr
 - Use **JUnit 5** (Jupiter) for unit tests.
 - Use **Robolectric** when Android framework classes are needed. Robolectric tests must use
   **JUnit 4** since Robolectric is not compatible with JUnit 5.
+- **Bytecode Weaving Tests**: For instrumentations that require bytecode weaving (e.g. okhttp3), validate changes via Android instrumented tests placed in a separate `testing` module within the instrumentation directory, as Robolectric does not support library bytecode weaving yet.
 - Use **MockK** (not Mockito) for mocking.
 - Use **AssertJ** for assertions (`assertThat(...).isEqualTo(...)`, not `assertEquals`).
 - Tests must pass: `./gradlew check`.

@@ -7,6 +7,7 @@ package io.opentelemetry.android.instrumentation.fragment
 
 import androidx.fragment.app.Fragment
 import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.common.ActiveSpan
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.trace.Span
@@ -20,25 +21,35 @@ internal class FragmentTracer(
 ) {
     private val fragmentName: String = fragment.javaClass.simpleName
 
-    fun startSpanIfNoneInProgress(action: String): FragmentTracer {
+    fun startSpanIfNoneInProgress(lifecycleEvent: String): FragmentTracer {
         if (activeSpan.spanInProgress()) {
             return this
         }
-        activeSpan.startSpan { createSpan(action) }
+        activeSpan.startSpan { createLifecycleSpan(lifecycleEvent) }
+        RumDiagnostics.d { "fragment: span start event=$lifecycleEvent fragment=$fragmentName" }
         return this
     }
 
     fun startFragmentCreation(): FragmentTracer {
-        activeSpan.startSpan { createSpan("Created") }
+        activeSpan.startSpan { createLifecycleSpan("Created") }
+        RumDiagnostics.d { "fragment: span start event=Created fragment=$fragmentName" }
         return this
     }
 
-    private fun createSpan(spanName: String): Span {
+    private fun createLifecycleSpan(lifecycleEvent: String): Span {
         val span =
             tracer
-                .spanBuilder(spanName)
+                .spanBuilder(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME)
                 .setAttribute(FRAGMENT_NAME_KEY, fragmentName)
-                .startSpan()
+                .setAttribute(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY, lifecycleEvent)
+                // Canonical ui.host.* alongside the per-host attributes above, so one cross-platform
+                // query can read Activity, Fragment and the iOS hosts the same way.
+                .setAttribute(RumConstants.UI_HOST_KIND_KEY, RumConstants.UI_HOST_KIND_FRAGMENT)
+                .setAttribute(RumConstants.UI_HOST_NAME_KEY, fragmentName)
+                .setAttribute(
+                    RumConstants.UI_HOST_LIFECYCLE_EVENT_KEY,
+                    RumConstants.uiHostLifecycleEventOf(lifecycleEvent),
+                ).startSpan()
         // do this after the span is started, so we can override the default screen.name set by the
         // RumAttributeAppender.
         span.setAttribute(RumConstants.SCREEN_NAME_KEY, screenName)
@@ -47,6 +58,7 @@ internal class FragmentTracer(
 
     fun endActiveSpan() {
         activeSpan.endActiveSpan()
+        RumDiagnostics.d { "fragment: span end fragment=$fragmentName" }
     }
 
     fun addPreviousScreenAttribute(): FragmentTracer {

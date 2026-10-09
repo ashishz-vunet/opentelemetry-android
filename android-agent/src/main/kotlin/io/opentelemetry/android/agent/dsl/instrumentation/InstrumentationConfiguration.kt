@@ -24,6 +24,9 @@ class InstrumentationConfiguration internal constructor(
         FragmentLifecycleConfiguration(config, instrumentationLoader)
     }
     private val anr: AnrReporterConfiguration by lazy { AnrReporterConfiguration(config, instrumentationLoader) }
+    private val appLifecycle: AppLifecycleReporterConfiguration by lazy {
+        AppLifecycleReporterConfiguration(config, instrumentationLoader)
+    }
     private val crash: CrashReporterConfiguration by lazy { CrashReporterConfiguration(config, instrumentationLoader) }
     private val networkMonitoring: NetworkMonitoringConfiguration by lazy {
         NetworkMonitoringConfiguration(config, instrumentationLoader)
@@ -37,6 +40,15 @@ class InstrumentationConfiguration internal constructor(
     }
     private val hybridClick: HybridClickConfiguration by lazy {
         HybridClickConfiguration(config, instrumentationLoader)
+    }
+    private val systemMetrics: SystemMetricsConfiguration by lazy {
+        SystemMetricsConfiguration(config, instrumentationLoader)
+    }
+    private val glide: GlideConfiguration by lazy {
+        GlideConfiguration(config)
+    }
+    private val coil: CoilConfiguration by lazy {
+        CoilConfiguration(config)
     }
 
     /**
@@ -58,6 +70,13 @@ class InstrumentationConfiguration internal constructor(
      */
     fun anrReporter(configure: AnrReporterConfiguration.() -> Unit) {
         anr.configure()
+    }
+
+    /**
+     * Configures `device.app.lifecycle` instrumentation.
+     */
+    fun appLifecycle(configure: AppLifecycleReporterConfiguration.() -> Unit) {
+        appLifecycle.configure()
     }
 
     /**
@@ -93,5 +112,26 @@ class InstrumentationConfiguration internal constructor(
      */
     fun hybridClick(configure: HybridClickConfiguration.() -> Unit) {
         hybridClick.configure()
+    }
+
+    /**
+     * Configures system metrics instrumentation.
+     */
+    fun systemMetrics(configure: SystemMetricsConfiguration.() -> Unit) {
+        systemMetrics.configure()
+    }
+
+    /**
+     * Configures Glide image-loading instrumentation.
+     */
+    fun glide(configure: GlideConfiguration.() -> Unit) {
+        glide.configure()
+    }
+
+    /**
+     * Configures Coil image-loading instrumentation.
+     */
+    fun coil(configure: CoilConfiguration.() -> Unit) {
+        coil.configure()
     }
 }

@@ -6,6 +6,7 @@
 package io.opentelemetry.android.internal.services.network.detector
 
 import android.content.Context
+import android.net.Network
 import io.opentelemetry.android.common.internal.features.networkattributes.data.CurrentNetwork
 
 /**
@@ -13,6 +14,9 @@ import io.opentelemetry.android.common.internal.features.networkattributes.data.
  */
 interface NetworkDetector {
     fun detectCurrentNetwork(): CurrentNetwork
+
+    /** Classifies a specific [Network], e.g. the one a NetworkCallback was handed. */
+    fun detectCurrentNetwork(network: Network): CurrentNetwork
 
     companion object {
         @JvmStatic

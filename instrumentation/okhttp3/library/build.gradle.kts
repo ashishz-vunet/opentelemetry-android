@@ -14,8 +14,12 @@ android {
 }
 
 dependencies {
+    implementation(project(":common"))
     implementation(project(":instrumentation:android-instrumentation"))
     compileOnly(libs.okhttp)
     api(libs.opentelemetry.instrumentation.okhttp)
     implementation(libs.opentelemetry.instrumentation.apiSemconv)
+    implementation(libs.byteBuddy)
+    testImplementation(libs.okhttp)
+    testImplementation(libs.okhttp.mockwebserver)
 }

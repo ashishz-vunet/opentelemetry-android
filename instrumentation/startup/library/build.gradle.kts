@@ -1,0 +1,32 @@
+plugins {
+    id("otel.android-library-conventions")
+    id("otel.publish-conventions")
+}
+
+description = "OpenTelemetry Android startup instrumentation"
+
+android {
+    namespace = "io.opentelemetry.android.instrumentation.startup"
+
+    defaultConfig {
+        consumerProguardFiles("consumer-rules.pro")
+    }
+}
+
+dependencies {
+    api(platform(libs.opentelemetry.platform.alpha)) // Required for sonatype publishing
+
+    implementation(project(":agent-api"))
+    implementation(project(":core"))
+    implementation(project(":instrumentation:android-instrumentation"))
+    implementation(project(":common"))
+    implementation(project(":services"))
+    implementation(project(":session"))
+    implementation(libs.androidx.core)
+    implementation(libs.opentelemetry.semconv)
+    implementation(libs.opentelemetry.sdk)
+    implementation(libs.opentelemetry.instrumentation.api)
+    implementation(libs.byteBuddy)
+    testImplementation(project(":test-common"))
+    testImplementation(libs.robolectric)
+}

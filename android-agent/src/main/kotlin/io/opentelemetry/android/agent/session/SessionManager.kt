@@ -40,27 +40,35 @@ internal class SessionManager(
 
         // Check if we need to create a new session.
         return if (sessionHasExpired(currentSession) || timeoutHandler.hasTimedOut()) {
-            val newId = idGenerator.generateSessionId()
-            val newSession = SessionImpl(newId, clock.now())
-
-            // Atomically update the session only if it hasn't been changed by another thread.
-            if (session.compareAndSet(currentSession, newSession)) {
-                sessionStorage.save(newSession)
-                timeoutHandler.bump()
-                // Observers need to be called after bumping the timer because it may create a new
-                // span.
-                notifyObserversOfSessionUpdate(currentSession, newSession)
-                newSession.id
-            } else {
-                // Another thread accessed this function prior to creating a new session. Use the
-                // current session.
-                timeoutHandler.bump()
-                session.get().id
-            }
+            rotateSession(currentSession)
         } else {
             // No new session needed, just bump the timeout and return current session ID
             timeoutHandler.bump()
             currentSession.id
+        }
+    }
+
+    override fun endSession() {
+        rotateSession(session.get())
+    }
+
+    private fun rotateSession(currentSession: Session): String {
+        val newId = idGenerator.generateSessionId()
+        val newSession = SessionImpl(newId, clock.now())
+
+        // Atomically update the session only if it hasn't been changed by another thread.
+        return if (session.compareAndSet(currentSession, newSession)) {
+            sessionStorage.save(newSession)
+            timeoutHandler.bump()
+            // Observers need to be called after bumping the timer because it may create a new
+            // span.
+            notifyObserversOfSessionUpdate(currentSession, newSession)
+            newSession.id
+        } else {
+            // Another thread accessed this function prior to creating a new session. Use the
+            // current session.
+            timeoutHandler.bump()
+            session.get().id
         }
     }
 

@@ -6,10 +6,10 @@ plugins {
 }
 
 // If this module is not marked as stable (the default state) then append "-alpha" to its version.
-// ---
+// Disabled on this fork by default (otel.publish.alpha=false) so all modules share one dev version for BOM alignment.
 // To mark a module as stable, it needs to define the following property: "otel.stable=true" preferably within a "gradle.properties" file
 // located in the same directory as the target module's "build.gradle.kts" file.
-if (findProperty("otel.stable") != "true") {
+if (findProperty("otel.publish.alpha") == "true" && findProperty("otel.stable") != "true") {
     version = "$version-alpha"
 }
 // If this release isn't "final" (the default state) then append "-SNAPSHOT" to this module's version.
@@ -48,63 +48,79 @@ if (android != null) {
 }
 
 afterEvaluate {
-    publishing.publications {
-        val maven = create<MavenPublication>("maven") {
-            val path = project.path
-            artifactId = computeArtifactId(path)
-            groupId = computeGroupId(path)
-            if (android != null) {
-                from(components.findByName(androidVariantToRelease))
-            } else {
-                val javaComponent =
-                    components.findByName("java") ?: components.findByName("javaPlatform")
-                javaComponent?.let {
-                    from(it)
-                }
-            }
-            pom {
-                val repoUrl = "https://github.com/open-telemetry/opentelemetry-android"
-                name.set("OpenTelemetry Android")
-                description.set(project.description)
-                url.set(repoUrl)
-                licenses {
-                    license {
-                        name.set("The Apache Software License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+    publishing {
+        publications {
+            val maven = create<MavenPublication>("maven") {
+                val path = project.path
+                artifactId = computeArtifactId(path)
+                groupId = computeGroupId(path)
+                if (android != null) {
+                    from(components.findByName(androidVariantToRelease))
+                } else {
+                    val javaComponent =
+                        components.findByName("java") ?: components.findByName("javaPlatform")
+                    javaComponent?.let {
+                        from(it)
                     }
                 }
-                scm {
-                    val scmUrl = "scm:git:git@github.com:open-telemetry/opentelemetry-android.git"
-                    connection.set(scmUrl)
-                    developerConnection.set(scmUrl)
-                    url.set(repoUrl)
-                    tag.set("HEAD")
-                }
-                developers {
-                    developer {
-                        id.set("opentelemetry")
-                        name.set("OpenTelemetry")
-                        url.set("https://github.com/open-telemetry/community")
+                pom {
+                    // Public metadata on Maven Central: VuNet branding, no link to this repo.
+                    val websiteUrl = "https://vunetsystems.com"
+                    name.set("VuNet Android Agent")
+                    description.set(project.description?.replace("OpenTelemetry", "VuNet"))
+                    url.set(websiteUrl)
+                    licenses {
+                        license {
+                            name.set("The Apache Software License, Version 2.0")
+                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    scm {
+                        // Central requires all three; same private repo as the SDK's POM.
+                        val scmUrl = "scm:git:git@github.com:vunetsystems/vutelemetry-android.git"
+                        connection.set(scmUrl)
+                        developerConnection.set(scmUrl)
+                        url.set(websiteUrl)
+                        tag.set("HEAD")
+                    }
+                    developers {
+                        developer {
+                            id.set("vunetsystems")
+                            name.set("VuNet Systems")
+                            url.set(websiteUrl)
+                        }
                     }
                 }
             }
-        }
 
-        // Signing only during a release.
-        if (isARelease) {
-            signing {
-                useInMemoryPgpKeys(System.getenv("GPG_PRIVATE_KEY"), System.getenv("GPG_PASSWORD"))
-                sign(maven)
+            if (isARelease) {
+                signing {
+                    useInMemoryPgpKeys(System.getenv("GPG_PRIVATE_KEY"), System.getenv("GPG_PASSWORD"))
+                    sign(maven)
+                }
             }
         }
     }
 }
 
+// Published under the VuNet SDK's group as parts of agent-android, so no coordinate says
+// "opentelemetry". Instrumentations keep their names under "<group>.instrumentation".
+val coreArtifactIds = mapOf(
+    ":opentelemetry-android-bom" to "agent-android-bom",
+    ":android-agent" to "agent-android-runtime",
+    ":core" to "agent-android-core",
+    ":common" to "agent-android-common",
+    ":agent-api" to "agent-android-api",
+    ":services" to "agent-android-services",
+    ":session" to "agent-android-session",
+)
+
 fun computeArtifactId(path: String): String {
     val projectName = project.name
     if (!path.startsWith(":instrumentation:")) {
-        // Return default artifactId for non auto-instrumentation publications.
-        return projectName
+        // A new core module must be named here, or it would publish under its bare project name.
+        return coreArtifactIds[path]
+            ?: throw IllegalStateException("No published artifactId for '$path'; add it to coreArtifactIds")
     }
 
     val match = Regex("^:instrumentation:([^:]+)(:[^:]+)?\$").matchEntire(path)

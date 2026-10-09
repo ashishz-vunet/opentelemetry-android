@@ -52,6 +52,9 @@ internal class Pre29ActivityLifecycleCallbacksTest {
         val testHarness = Pre29ActivityCallbackTestHarness(rumLifecycleCallbacks)
 
         val activity = mockk<Activity>()
+        // No window on a bare mock: FirstDrawNotifier falls back to ending the span
+        // immediately, which is the behaviour asserted below.
+        every { activity.window } returns null
         testHarness.runAppStartupLifecycle(activity)
 
         val spans = otelTesting.spans
@@ -87,13 +90,16 @@ internal class Pre29ActivityLifecycleCallbacksTest {
         startupAppAndClearSpans(testHarness)
 
         val activity = mockk<Activity>()
+        // No window on a bare mock: FirstDrawNotifier falls back to ending the span
+        // immediately, which is the behaviour asserted below.
+        every { activity.window } returns null
         testHarness.runActivityCreationLifecycle(activity)
         val spans = otelTesting.spans
         assertEquals(1, spans.size)
 
         val span = spans[0]
 
-        assertEquals("AppStart", span.name)
+        assertEquals(RumConstants.APP_START_SPAN_NAME, span.name)
         assertEquals("warm", span.attributes.get(RumConstants.START_TYPE_KEY))
         assertEquals(
             activity.javaClass.simpleName,
@@ -127,6 +133,9 @@ internal class Pre29ActivityLifecycleCallbacksTest {
         startupAppAndClearSpans(testHarness)
 
         val activity = mockk<Activity>()
+        // No window on a bare mock: FirstDrawNotifier falls back to ending the span
+        // immediately, which is the behaviour asserted below.
+        every { activity.window } returns null
         testHarness.runActivityRestartedLifecycle(activity)
 
         val spans = otelTesting.spans
@@ -134,7 +143,7 @@ internal class Pre29ActivityLifecycleCallbacksTest {
 
         val span = spans[0]
 
-        assertEquals("AppStart", span.name)
+        assertEquals(RumConstants.APP_START_SPAN_NAME, span.name)
         assertEquals("hot", span.attributes.get(RumConstants.START_TYPE_KEY))
         assertEquals(
             activity.javaClass.simpleName,
@@ -163,6 +172,9 @@ internal class Pre29ActivityLifecycleCallbacksTest {
         startupAppAndClearSpans(testHarness)
 
         val activity = mockk<Activity>()
+        // No window on a bare mock: FirstDrawNotifier falls back to ending the span
+        // immediately, which is the behaviour asserted below.
+        every { activity.window } returns null
         testHarness.runActivityResumedLifecycle(activity)
 
         val spans = otelTesting.spans
@@ -170,7 +182,8 @@ internal class Pre29ActivityLifecycleCallbacksTest {
 
         val span = spans[0]
 
-        assertEquals("Resumed", span.name)
+        assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, span.name)
+        assertEquals("Resumed", span.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
         assertEquals(
             activity.javaClass.simpleName,
             span.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY),
@@ -198,6 +211,9 @@ internal class Pre29ActivityLifecycleCallbacksTest {
         startupAppAndClearSpans(testHarness)
 
         val activity = mockk<Activity>()
+        // No window on a bare mock: FirstDrawNotifier falls back to ending the span
+        // immediately, which is the behaviour asserted below.
+        every { activity.window } returns null
         testHarness.runActivityDestroyedFromStoppedLifecycle(activity)
 
         val spans = otelTesting.spans
@@ -205,7 +221,8 @@ internal class Pre29ActivityLifecycleCallbacksTest {
 
         val span = spans[0]
 
-        assertEquals("Destroyed", span.name)
+        assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, span.name)
+        assertEquals("Destroyed", span.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
         assertEquals(
             activity.javaClass.simpleName,
             span.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY),
@@ -230,6 +247,9 @@ internal class Pre29ActivityLifecycleCallbacksTest {
         startupAppAndClearSpans(testHarness)
 
         val activity = mockk<Activity>()
+        // No window on a bare mock: FirstDrawNotifier falls back to ending the span
+        // immediately, which is the behaviour asserted below.
+        every { activity.window } returns null
         testHarness.runActivityDestroyedFromPausedLifecycle(activity)
 
         val spans = otelTesting.spans
@@ -237,7 +257,8 @@ internal class Pre29ActivityLifecycleCallbacksTest {
 
         val stoppedSpan = spans[0]
 
-        assertEquals("Stopped", stoppedSpan.name)
+        assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, stoppedSpan.name)
+        assertEquals("Stopped", stoppedSpan.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
         assertEquals(
             activity.javaClass.simpleName,
             stoppedSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY),
@@ -255,7 +276,8 @@ internal class Pre29ActivityLifecycleCallbacksTest {
 
         val destroyedSpan = spans[1]
 
-        assertEquals("Destroyed", destroyedSpan.name)
+        assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, destroyedSpan.name)
+        assertEquals("Destroyed", destroyedSpan.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
         assertEquals(
             activity.javaClass.simpleName,
             destroyedSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY),
@@ -280,6 +302,9 @@ internal class Pre29ActivityLifecycleCallbacksTest {
         startupAppAndClearSpans(testHarness)
 
         val activity = mockk<Activity>()
+        // No window on a bare mock: FirstDrawNotifier falls back to ending the span
+        // immediately, which is the behaviour asserted below.
+        every { activity.window } returns null
         testHarness.runActivityStoppedFromRunningLifecycle(activity)
 
         val spans = otelTesting.spans
@@ -287,7 +312,8 @@ internal class Pre29ActivityLifecycleCallbacksTest {
 
         val stoppedSpan = spans[0]
 
-        assertEquals("Paused", stoppedSpan.name)
+        assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, stoppedSpan.name)
+        assertEquals("Paused", stoppedSpan.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
         assertEquals(
             activity.javaClass.simpleName,
             stoppedSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY),
@@ -305,7 +331,8 @@ internal class Pre29ActivityLifecycleCallbacksTest {
 
         val destroyedSpan = spans[1]
 
-        assertEquals("Stopped", destroyedSpan.name)
+        assertEquals(RumConstants.ACTIVITY_LIFECYCLE_SPAN_NAME, destroyedSpan.name)
+        assertEquals("Stopped", destroyedSpan.attributes.get(RumConstants.ACTIVITY_LIFECYCLE_EVENT_KEY))
         assertEquals(
             activity.javaClass.simpleName,
             destroyedSpan.attributes.get(ActivityTracer.ACTIVITY_NAME_KEY),

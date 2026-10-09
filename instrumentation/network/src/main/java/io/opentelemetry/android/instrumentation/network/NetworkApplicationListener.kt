@@ -5,6 +5,7 @@
 
 package io.opentelemetry.android.instrumentation.network
 
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.internal.features.networkattributes.data.CurrentNetwork
 import io.opentelemetry.android.internal.services.applifecycle.ApplicationStateListener
 import io.opentelemetry.android.internal.services.network.CurrentNetworkProvider
@@ -71,6 +72,7 @@ internal class NetworkApplicationListener(
                 .setEventName("network.change")
                 .setAllAttributes(attributesBuilder.build())
                 .emit()
+            RumDiagnostics.d { "network: change status=${currentNetwork.state}" }
         }
     }
 }

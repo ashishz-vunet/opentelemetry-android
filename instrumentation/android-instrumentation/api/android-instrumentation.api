@@ -8,3 +8,7 @@ public abstract interface class io/opentelemetry/android/instrumentation/Configu
 	public abstract fun setActiveContextWindowMillis (J)V
 }
 
+public abstract interface class io/opentelemetry/android/instrumentation/ConfigurableSystemMetricsInstrumentation {
+	public abstract fun setCollectionIntervalSeconds (J)V
+}
+

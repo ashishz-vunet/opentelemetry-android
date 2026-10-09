@@ -1,6 +1,20 @@
 public final class io/opentelemetry/android/AndroidResource {
 	public static final field INSTANCE Lio/opentelemetry/android/AndroidResource;
+	public static final field SYSTEM_DISK_TOTAL Lio/opentelemetry/api/common/AttributeKey;
+	public static final field SYSTEM_MEMORY_TOTAL Lio/opentelemetry/api/common/AttributeKey;
 	public static final fun createDefault (Landroid/content/Context;)Lio/opentelemetry/sdk/resources/Resource;
+	public static final fun createMinimal (Landroid/content/Context;)Lio/opentelemetry/sdk/resources/Resource;
+}
+
+public final class io/opentelemetry/android/AppStartSpans {
+	public static final field INSTANCE Lio/opentelemetry/android/AppStartSpans;
+	public static final fun getCurrent ()Lio/opentelemetry/api/trace/Span;
+}
+
+public final class io/opentelemetry/android/BridgedSpans {
+	public static final field INSTANCE Lio/opentelemetry/android/BridgedSpans;
+	public static final fun export (Ljava/util/Collection;)Z
+	public static final fun forceFlush ()Lio/opentelemetry/sdk/common/CompletableResultCode;
 }
 
 public final class io/opentelemetry/android/OpenTelemetryRumBuilder {

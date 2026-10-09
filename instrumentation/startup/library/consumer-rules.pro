@@ -1,0 +1,2 @@
+-keep class io.opentelemetry.android.instrumentation.startup.AppAnchorContentProvider { *; }
+-keep class io.opentelemetry.android.instrumentation.startup.EarlyStartupContentProvider { *; }

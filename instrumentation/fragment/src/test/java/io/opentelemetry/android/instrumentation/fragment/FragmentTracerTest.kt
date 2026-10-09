@@ -49,7 +49,49 @@ internal class FragmentTracerTest {
         trackableTracer.startFragmentCreation()
         trackableTracer.endActiveSpan()
         val span = this.singleSpan
-        assertEquals("Created", span.name)
+        assertEquals(RumConstants.FRAGMENT_LIFECYCLE_SPAN_NAME, span.name)
+        assertEquals("Created", span.attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
+    }
+
+    @Test
+    fun stampsCanonicalUiHostAttributes() {
+        val trackableTracer =
+            FragmentTracer(
+                fragment = mockk<Fragment>(),
+                tracer = tracer,
+                screenName = "",
+                activeSpan = activeSpan,
+            )
+        trackableTracer.startFragmentCreation()
+        trackableTracer.endActiveSpan()
+
+        val attributes = this.singleSpan.attributes
+        assertEquals("fragment", attributes.get(RumConstants.UI_HOST_KIND_KEY))
+        assertEquals(
+            attributes.get(FragmentTracer.FRAGMENT_NAME_KEY),
+            attributes.get(RumConstants.UI_HOST_NAME_KEY),
+        )
+        assertEquals("created", attributes.get(RumConstants.UI_HOST_LIFECYCLE_EVENT_KEY))
+        // The superseded key keeps its PascalCase value on the same span.
+        assertEquals("Created", attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
+    }
+
+    /** The one multi-word event: a plain lowercase would emit `viewdestroyed`. */
+    @Test
+    fun stampsMultiWordLifecycleEventAsSnakeCase() {
+        val trackableTracer =
+            FragmentTracer(
+                fragment = mockk<Fragment>(),
+                tracer = tracer,
+                screenName = "",
+                activeSpan = activeSpan,
+            )
+        trackableTracer.startSpanIfNoneInProgress("ViewDestroyed")
+        trackableTracer.endActiveSpan()
+
+        val attributes = this.singleSpan.attributes
+        assertEquals("view_destroyed", attributes.get(RumConstants.UI_HOST_LIFECYCLE_EVENT_KEY))
+        assertEquals("ViewDestroyed", attributes.get(RumConstants.FRAGMENT_LIFECYCLE_EVENT_KEY))
     }
 
     @Test

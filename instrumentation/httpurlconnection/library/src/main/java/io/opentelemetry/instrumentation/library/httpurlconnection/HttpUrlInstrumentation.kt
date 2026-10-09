@@ -8,6 +8,7 @@ package io.opentelemetry.instrumentation.library.httpurlconnection
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.instrumentation.api.instrumenter.AttributesExtractor
 import io.opentelemetry.instrumentation.api.internal.HttpConstants
@@ -71,6 +72,7 @@ class HttpUrlInstrumentation : AndroidInstrumentation {
 
     private var peerServiceMapping: Map<String, String> = emptyMap()
     private var emitExperimentalHttpClientMetrics = false
+    private var captureNetworkTimingEnabled = true
 
     /**
      * The interval duration in milli seconds that the runnable from
@@ -106,7 +108,19 @@ class HttpUrlInstrumentation : AndroidInstrumentation {
 
     fun emitExperimentalHttpClientMetrics(): Boolean = emitExperimentalHttpClientMetrics
 
+    /**
+     * When enabled, records best-effort total request duration as `http.client.timing.total_ms`
+     * with `http.client.timing.phases_supported=false`. HttpURLConnection cannot expose per-phase
+     * breakdown; use OkHttp instrumentation for full phase timing.
+     */
+    fun setCaptureNetworkTiming(captureNetworkTiming: Boolean) {
+        this.captureNetworkTimingEnabled = captureNetworkTiming
+    }
+
+    fun captureNetworkTiming(): Boolean = captureNetworkTimingEnabled
+
     override fun install(context: Context, openTelemetryRum: OpenTelemetryRum) {
+        RumDiagnostics.d { "httpUrlConnection: substitution install" }
         HttpUrlConnectionSingletons.configure(this, openTelemetryRum.openTelemetry)
     }
 

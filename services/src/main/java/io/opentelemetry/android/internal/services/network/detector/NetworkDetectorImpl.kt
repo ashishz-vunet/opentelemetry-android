@@ -7,6 +7,7 @@ package io.opentelemetry.android.internal.services.network.detector
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.telephony.TelephonyManager
@@ -36,39 +37,41 @@ internal class NetworkDetectorImpl(
     private val carrierFinder = CarrierFinder(context, telephonyManager)
 
     override fun detectCurrentNetwork(): CurrentNetwork {
-        val network = connectivityManager.activeNetwork
-        val capabilities =
-            network?.let {
-                connectivityManager.getNetworkCapabilities(it)
-            }
+        val network = connectivityManager.activeNetwork ?: return CurrentNetworkProvider.NO_NETWORK
+        return detectCurrentNetwork(network)
+    }
+
+    override fun detectCurrentNetwork(network: Network): CurrentNetwork {
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        // Derive metered from the network we were handed; isActiveNetworkMetered lies when this
+        // network is not (yet) the active one.
+        val metered =
+            capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)?.not()
+                ?: connectivityManager.isActiveNetworkMetered
 
         return when {
-            network == null -> {
-                CurrentNetworkProvider.NO_NETWORK
-            }
-
             capabilities == null -> {
-                CurrentNetworkProvider.UNKNOWN_NETWORK
+                CurrentNetwork(NetworkState.TRANSPORT_UNKNOWN, metered = metered)
             }
 
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
-                buildCellularNetwork()
+                buildCellularNetwork(metered)
             }
 
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
-                buildNetwork(NetworkState.TRANSPORT_WIFI)
+                buildNetwork(NetworkState.TRANSPORT_WIFI, metered)
             }
 
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> {
-                buildNetwork(NetworkState.TRANSPORT_VPN)
+                buildNetwork(NetworkState.TRANSPORT_VPN, metered)
             }
 
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> {
-                buildNetwork(NetworkState.TRANSPORT_WIRED)
+                buildNetwork(NetworkState.TRANSPORT_WIRED, metered)
             }
 
             else -> {
-                CurrentNetworkProvider.UNKNOWN_NETWORK
+                CurrentNetwork(NetworkState.TRANSPORT_UNKNOWN, metered = metered)
             }
         }
     }
@@ -76,18 +79,22 @@ internal class NetworkDetectorImpl(
     /**
      * Builds a network for non-cellular networks.
      */
-    private fun buildNetwork(networkState: NetworkState) = CurrentNetwork(networkState)
+    private fun buildNetwork(
+        networkState: NetworkState,
+        metered: Boolean,
+    ) = CurrentNetwork(networkState, metered = metered)
 
     /**
      * Builds a cellular network with carrier and subtype information.
      */
-    private fun buildCellularNetwork(): CurrentNetwork {
+    private fun buildCellularNetwork(metered: Boolean): CurrentNetwork {
         val carrier = carrierFinder.get()
         val subType = findSubtype()
         return CurrentNetwork(
             state = TRANSPORT_CELLULAR,
             carrier = carrier,
             subType = subType,
+            metered = metered,
         )
     }
 
