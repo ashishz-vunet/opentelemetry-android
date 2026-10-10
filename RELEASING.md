@@ -37,7 +37,7 @@ Repository secrets for GitHub Actions: `SONATYPE_USER`, `SONATYPE_KEY`, `GPG_PRI
 | Workflow | Trigger | Publishes |
 |----------|---------|-----------|
 | [PR build](.github/workflows/pr-check.yaml) | every PR | nothing; runs `preflight` against the PR's base branch, then `check` |
-| [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | PR merged to `working` (or manual run) | `x.y.z-SNAPSHOT` |
+| [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | push (merge) to `working` (or manual run), after a `maven-central` reviewer approves | `x.y.z-SNAPSHOT` |
 | [Release](.github/workflows/release.yml) | push (merge) to `rc/**` or `release/**` | `verify` (preflight + `check`), then `publish` after approval: the release, the tag and the GitHub release |
 
 `publish` runs in the `maven-central` environment: one of its required reviewers (`ashishz-vunet`, `gopal-vunet`, `ganeshnk-vunet`, `sid-vunet`) approves in the Actions run before anything is uploaded. The environment exists with those required reviewers (Settings → Environments); do not delete it: a missing environment is recreated unprotected and the publish would run unapproved.

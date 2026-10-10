@@ -3,11 +3,10 @@ name: Publish Maven Central Snapshot
 
 on:
   # Each merge into working publishes <version>-SNAPSHOT (working is the post-1.0 dev line).
-  pull_request:
+  # push, not pull_request: PRs come from forks, and pull_request runs from forks get no secrets.
+  push:
     branches:
       - working
-    types:
-      - closed
   workflow_dispatch:
 
 permissions:
@@ -16,8 +15,8 @@ permissions:
 jobs:
   publish:
     name: publish-maven-central-snapshot
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    environment: maven-central # a required reviewer approves before the snapshot is published
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 

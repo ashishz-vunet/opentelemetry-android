@@ -43,7 +43,7 @@ Release build: publish with `-Pfinal=true` → **`0.0.1`** for all modules.
 
 | Branch event | Published version |
 |--------------|-------------------|
-| PR merged to `working` | `<version>-SNAPSHOT` (e.g. `1.1.0-SNAPSHOT`) |
+| push (merge) to `working`, after a `maven-central` reviewer approves | `<version>-SNAPSHOT` (e.g. `1.1.0-SNAPSHOT`) |
 | push to `release/*` | `0.0.1` (must be greater than latest on Central) |
 
 ### Bumping versions
@@ -108,7 +108,8 @@ a regular release.
 
 ## Snapshot builds
 
-Snapshot builds are published to Maven Central when PRs merge to `working`.
+Snapshot builds are published to Maven Central when PRs merge to `working`, once a
+`maven-central` environment reviewer approves the run.
 Users may choose to build and test and file issues against SNAPSHOT
 builds, but their use in production is strongly discouraged.
 
