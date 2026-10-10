@@ -23,6 +23,8 @@ jobs:
   verify:
     name: "verify"
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -31,6 +33,19 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: Version to publish
+        id: version
+        run: |
+          version="$(.github/scripts/get-version.sh)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Release to publish::$version (com.vunetsystems.agent.android:agent-android-bom:$version)"
+          {
+            echo "### Release to publish: \`$version\`"
+            echo "| Branch | Commit | BOM |"
+            echo "|---|---|---|"
+            echo "| \`$GITHUB_REF_NAME\` | \`${GITHUB_SHA::8}\` | \`com.vunetsystems.agent.android:agent-android-bom:$version\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preflight script self-check
         run: bash .github/scripts/test-preflight.sh
@@ -45,7 +60,8 @@ jobs:
         run: ./gradlew check --stacktrace
 
   publish:
-    name: "publish"
+    # Shown in the run graph next to the approval request.
+    name: publish ${{ needs.verify.outputs.version }}
     needs: verify
     runs-on: ubuntu-latest
     environment: maven-central # required reviewers approve before anything is published
