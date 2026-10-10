@@ -2,9 +2,10 @@
 name: Publish Maven Central Snapshot
 
 on:
+  # Each merge into working publishes <version>-SNAPSHOT (working is the post-1.0 dev line).
   pull_request:
     branches:
-      - develop
+      - working
     types:
       - closed
   workflow_dispatch:

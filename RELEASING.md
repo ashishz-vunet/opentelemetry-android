@@ -8,9 +8,11 @@ Same lanes and version rules as vuTelemetry-android, so the fork and the SDK shi
 
 | Branch | `version` in `gradle.properties` | Published on merge | Permanent |
 |--------|----------------------------------|--------------------|-----------|
-| `develop` | `x.y.z` | `x.y.z-SNAPSHOT` | no, overwritten |
+| `working` | `x.y.z` (next train, e.g. `1.1.0`) | `x.y.z-SNAPSHOT` | no, overwritten |
 | `rc/*` | `x.y.z-rc.N` | `x.y.z-rc.N` + tag `vx.y.z-rc.N` + GitHub pre-release | yes |
 | `release/*` | `x.y.z` | `x.y.z` + tag `vx.y.z` + GitHub release | yes |
+
+`working` is the development line for the next release; `rc/1.0` only takes patch fixes, which are then merged into `working` (merge commit, not squash). `develop` is no longer used.
 
 Every PR into `rc/*` or `release/*` must carry a version that is not on Maven Central yet, so it bumps `version` (`1.0.0-rc.1` → `1.0.0-rc.2`). [`preflight.sh`](.github/scripts/preflight.sh) checks this on the PR and again before publishing; Central also refuses to overwrite a release. Nobody creates tags by hand: CI tags the commit it published.
 
@@ -35,7 +37,7 @@ Repository secrets for GitHub Actions: `SONATYPE_USER`, `SONATYPE_KEY`, `GPG_PRI
 | Workflow | Trigger | Publishes |
 |----------|---------|-----------|
 | [PR build](.github/workflows/pr-check.yaml) | every PR | nothing; runs `preflight` against the PR's base branch, then `check` |
-| [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | PR merged to `develop` (or manual run) | `x.y.z-SNAPSHOT` |
+| [Publish Maven Central Snapshot](.github/workflows/publish-maven-central-snapshot.yml) | PR merged to `working` (or manual run) | `x.y.z-SNAPSHOT` |
 | [Release](.github/workflows/release.yml) | push (merge) to `rc/**` or `release/**` | `verify` (preflight + `check`), then `publish` after approval: the release, the tag and the GitHub release |
 
 `publish` runs in the `maven-central` environment: one of its required reviewers (`ashishz-vunet`, `gopal-vunet`, `ganeshnk-vunet`, `sid-vunet`) approves in the Actions run before anything is uploaded. The environment exists with those required reviewers (Settings → Environments); do not delete it: a missing environment is recreated unprotected and the publish would run unapproved.
