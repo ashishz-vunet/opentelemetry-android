@@ -12,4 +12,8 @@ exclude = [
   '^https://github.com/open-telemetry/opentelemetry-android/(issues|pull)/\d+$',
   "^https://maven-badges.sml.io/maven-central/io.opentelemetry.android/.*$",
   "^https://central.sonatype.com/service/rest/repository/browse/maven-snapshots/.*$",
+  # Private VuNet repos (vuTelemetry-android) answer 404 to an anonymous checker.
+  "^https://github.com/vunetsystems/.*$",
+  # Slack refuses automated requests (403).
+  "^https://cloud-native.slack.com/.*$",
 ]
