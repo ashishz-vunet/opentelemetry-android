@@ -12,7 +12,7 @@ Same lanes and version rules as vuTelemetry-android, so the fork and the SDK shi
 | `rc/*` | `x.y.z-rc.N` | `x.y.z-rc.N` + tag `vx.y.z-rc.N` + GitHub pre-release | yes |
 | `release/*` | `x.y.z` | `x.y.z` + tag `vx.y.z` + GitHub release | yes |
 
-`working` is the development line for the next release; `rc/1.0` only takes patch fixes, which are then merged into `working` (merge commit, not squash). `develop` is no longer used.
+`working` is the development line for the next release, protected by the `working-ci-gate` ruleset: PRs must pass `required-status-check` (PR build: preflight + checks) to merge, and the branch cannot be deleted or force-pushed; `rc/1.0` only takes patch fixes, which are then merged into `working` (merge commit, not squash). `develop` is no longer used.
 
 Every PR into `rc/*` or `release/*` must carry a version that is not on Maven Central yet, so it bumps `version` (`1.0.0-rc.1` → `1.0.0-rc.2`). [`preflight.sh`](.github/scripts/preflight.sh) checks this on the PR and again before publishing; Central also refuses to overwrite a release. Nobody creates tags by hand: CI tags the commit it published.
 
