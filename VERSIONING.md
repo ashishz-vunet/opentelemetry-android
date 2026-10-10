@@ -43,13 +43,13 @@ Release build: publish with `-Pfinal=true` → **`0.0.1`** for all modules.
 
 | Branch event | Published version |
 |--------------|-------------------|
-| PR merged to `develop` | `0.0.1-SNAPSHOT` |
+| push (merge) to `working`, after a `maven-central` reviewer approves | `<version>-SNAPSHOT` (e.g. `1.1.0-SNAPSHOT`) |
 | push to `release/*` | `0.0.1` (must be greater than latest on Central) |
 
 ### Bumping versions
 
 1. Update `version` in `gradle.properties` (e.g. `0.0.2`).
-2. Merge to `develop` for snapshots, or `release/*` for releases.
+2. Merge to `working` for snapshots, or `rc/*` / `release/*` for releases.
 3. Update the matching BOM version in vuTelemetry-android.
 
 ### Resource version attributes (VuNet integration)
@@ -108,7 +108,8 @@ a regular release.
 
 ## Snapshot builds
 
-Snapshot builds are published to Maven Central when PRs merge to `develop`.
+Snapshot builds are published to Maven Central when PRs merge to `working`, once a
+`maven-central` environment reviewer approves the run.
 Users may choose to build and test and file issues against SNAPSHOT
 builds, but their use in production is strongly discouraged.
 

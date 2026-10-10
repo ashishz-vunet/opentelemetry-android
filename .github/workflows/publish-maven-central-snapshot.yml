@@ -2,21 +2,49 @@
 name: Publish Maven Central Snapshot
 
 on:
-  pull_request:
+  # Each merge into working publishes <version>-SNAPSHOT (working is the post-1.0 dev line).
+  # push, not pull_request: PRs come from forks, and pull_request runs from forks get no secrets.
+  push:
     branches:
-      - develop
-    types:
-      - closed
+      - working
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# One snapshot per branch at a time; a later merge waits instead of racing.
+concurrency:
+  group: snapshot-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  # Approval is only requested once this passes, so a reviewer never approves a broken build.
+  verify:
+    name: "verify"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up JDK for running Gradle
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Preflight (version fits the branch, not on Maven Central yet)
+        run: bash .github/scripts/preflight.sh
+
+      - name: touch local props
+        run: touch demo-app/local.properties
+
+      - name: Run checks
+        run: ./gradlew check --stacktrace
+
   publish:
     name: publish-maven-central-snapshot
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    needs: verify
     runs-on: ubuntu-latest
+    environment: maven-central # a required reviewer approves before the snapshot is published
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
