@@ -5,10 +5,13 @@
 
 package io.opentelemetry.android.instrumentation.crash
 
+import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.common.internal.utils.threadIdCompat
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.context.Context
 import io.opentelemetry.semconv.ExceptionAttributes.EXCEPTION_MESSAGE
 import io.opentelemetry.semconv.ExceptionAttributes.EXCEPTION_STACKTRACE
@@ -21,28 +24,28 @@ internal class CrashReporter(
 ) {
     private val extractors: List<EventAttributesExtractor<CrashDetails>> =
         additionalExtractors.toList()
+    private lateinit var crashTracer: Tracer
 
     /** Installs the crash reporting instrumentation.  */
     fun install(openTelemetry: OpenTelemetry) {
+        crashTracer = openTelemetry.tracerProvider.get("io.opentelemetry.crash")
         val handler =
             CrashReportingExceptionHandler(
-                crashProcessor = { crashDetails: CrashDetails ->
-                    processCrash(openTelemetry, crashDetails)
+                crashProcessor = { crashDetails ->
+                    processCrash(crashDetails)
                 },
             )
         Thread.setDefaultUncaughtExceptionHandler(handler)
     }
 
-    private fun processCrash(
-        openTelemetry: OpenTelemetry,
-        crashDetails: CrashDetails,
-    ) {
-        val logger = openTelemetry.logsBridge.loggerBuilder("io.opentelemetry.crash").build()
+    private fun processCrash(crashDetails: CrashDetails) {
+        RumDiagnostics.d { "crash: captured type=${crashDetails.cause.javaClass.simpleName}" }
         val throwable = crashDetails.cause
         val thread = crashDetails.thread
         val attributesBuilder =
             Attributes
                 .builder()
+                .put(RumConstants.ERROR_RUNTIME_KEY, RumConstants.ERROR_RUNTIME_JVM)
                 .put(THREAD_ID, thread.threadIdCompat)
                 .put(THREAD_NAME, thread.name)
                 .put(EXCEPTION_MESSAGE, throwable.message)
@@ -50,15 +53,16 @@ internal class CrashReporter(
                     EXCEPTION_STACKTRACE,
                     throwable.stackTraceToString(),
                 ).put(EXCEPTION_TYPE, throwable.javaClass.name)
+        // Extractors run after this write and may replace error.runtime; that is the
+        // supported in-process override for a wrapper that still goes through this reporter.
         for (extractor in extractors) {
             val extractedAttributes = extractor.extract(Context.current(), crashDetails)
             attributesBuilder.putAll(extractedAttributes)
         }
-        val eventBuilder =
-            logger.logRecordBuilder()
-        eventBuilder
-            .setEventName("device.crash")
+        crashTracer
+            .spanBuilder("device.crash")
             .setAllAttributes(attributesBuilder.build())
-            .emit()
+            .startSpan()
+            .end()
     }
 }

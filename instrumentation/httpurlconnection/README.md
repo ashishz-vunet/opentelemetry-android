@@ -44,7 +44,75 @@ the following occurs: the response stream is fully read, the stream is closed,
   - `network.peer.address` / `network.peer.port` — connection endpoint, when available
   - Request and response headers captured according to configuration: `http.request.header.<name>` / `http.response.header.<name>`
 
-If the request throws an IOException, the span is ended and the exception is recorded.
+If the request throws an IOException, the span is ended and the exception is recorded. Failed spans
+include a normalized `http.error.category` attribute alongside the standard `error.type` attribute:
+
+| `http.error.category` | When |
+|-----------------------|------|
+| `timeout` | Connect/read/write timeout (`SocketTimeoutException`, `InterruptedIOException`) |
+| `dns` | DNS resolution failure (`UnknownHostException`) |
+| `ssl` | TLS or certificate failure (`SSLException`, `CertificateException`) |
+| `io` | Other transport I/O failure (`IOException`) |
+| `http_client` | HTTP 4xx/5xx response with no transport exception |
+| `unknown` | Other failure types |
+
+Use `http.response.status_code` to distinguish 4xx vs 5xx when `http.error.category` is `http_client`.
+
+#### Status code when no response was received
+
+When a request fails before any response arrives, the OpenTelemetry HTTP attributes extractor omits
+`http.response.status_code` entirely, which is indistinguishable downstream from a request that was
+never instrumented. This instrumentation fills that gap:
+
+| Failure | Exception | `http.response.status_code` |
+|---------|-----------|-----------------------------|
+| DNS resolution failure | `UnknownHostException` | `0` |
+| Connection refused / no route | `ConnectException`, `NoRouteToHostException` | `0` |
+| TLS handshake failure | `SSLHandshakeException` (including a wrapped `CertificateException`) | `0` |
+| Timeout | `SocketTimeoutException`, `InterruptedIOException` | *absent* |
+| Failure after the server answered | `FileNotFoundException` (any response `>= 400`), `SocketException("Connection reset")` mid-body | actual status (`404`, `500`, …) |
+| Any other failure | — | *absent* |
+| Response received (any status) | — | actual status (`200`, `404`, `500`, …) |
+
+Reporting `0` asserts "the request never reached the server", so the match is on the specific
+exception types that prove it — **not** on the coarse `http.error.category` buckets above. The `io`
+category maps *any* unmatched `IOException`, which includes failures proving the opposite: an HTTP/2
+`StreamResetException` means the server sent the reset, and a connection reset mid-body means it had
+already answered. Everything outside the pre-request set keeps the attribute absent:
+
+* **Timeouts** — the request may well have reached the server and been processed; the response
+  simply did not arrive in time.
+* **Failures after the server answered** — `0` would be a lie, and so would *absent*.
+  `HttpURLConnection.getInputStream()` raises `FileNotFoundException` for any response `>= 400`, so
+  a plain 404 reaches the instrumentation on the throwable path. `reportWithThrowable` asks the
+  connection for the code it already holds rather than reporting the `-1` sentinel, so the real
+  `404`/`500` is recorded alongside the error. When the request genuinely never reached a server
+  there is no code to retrieve and the sentinel still applies.
+* **Unrecognised failures** — by definition it is not known whether the server was reached, which
+  is exactly where claiming "never got there" is least defensible.
+
+> **Note:** reporting `0` is a deliberate deviation from the OpenTelemetry semantic conventions,
+> which leave `http.response.status_code` unset when no response was received.
+
+### Network timing (incubating, best-effort)
+
+When `captureNetworkTiming` is enabled (default `true`), HttpURLConnection spans include total
+request duration only. HttpURLConnection cannot expose DNS/TCP/TLS/TTFB phase breakdown; use
+[`okhttp3-library`](../okhttp3/README.md) instrumentation for full phase timing.
+
+| Signal | Value |
+|--------|-------|
+| `http.client.timing.total_ms` | Wall-clock ms from first traced hook to span end |
+| `http.client.timing.phases_supported` | `false` |
+| Span event `http.call` | `{ duration_ms: <total_ms> }` |
+
+Disable timing capture:
+
+```java
+HttpUrlInstrumentation instrumentation =
+    AndroidInstrumentationLoader.getInstrumentation(HttpUrlInstrumentation.class);
+instrumentation.setCaptureNetworkTiming(false);
+```
 
 ### Configuration impact on telemetry
 

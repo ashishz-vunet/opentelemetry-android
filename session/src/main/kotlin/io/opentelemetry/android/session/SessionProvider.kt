@@ -15,6 +15,14 @@ fun interface SessionProvider {
      */
     fun getSessionId(): String
 
+    /**
+     * Ends the current session immediately and starts a new one with a fresh session ID.
+     * Default implementation is a no-op for custom providers that do not support rotation.
+     */
+    fun endSession() {
+        // default noop
+    }
+
     companion object {
 
         /**

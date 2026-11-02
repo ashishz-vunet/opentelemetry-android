@@ -1,7 +1,99 @@
 # OpenTelemetry Android Versioning
 
-This document address a variety of versioning and release considerations for
-the OpenTelemetry Android project.
+This document addresses versioning and release considerations for this fork.
+
+## VuNet fork — Maven Central versioning
+
+This fork (published as `com.vunetsystems.agent.android`) uses a single published version for
+**every** module so consumers can align dependencies with one BOM coordinate.
+
+### Published coordinates
+
+| Role | Maven coordinate (snapshot) |
+|------|-----------------------------|
+| BOM | `com.vunetsystems.agent.android:agent-android-bom:1.0.0-rc.1-SNAPSHOT` |
+| Agent entry | `com.vunetsystems.agent.android:agent-android-runtime:1.0.0-rc.1-SNAPSHOT` |
+| Other core modules | `com.vunetsystems.agent.android:agent-android-{core,common,api,services,session}` |
+| Instrumentation | `com.vunetsystems.agent.android.instrumentation:<artifact>:1.0.0-rc.1-SNAPSHOT` |
+
+Releases use the same coordinates without `-SNAPSHOT` (e.g. `1.0.0-rc.1`).
+
+Published under the VuNet SDK's group: core modules are `com.vunetsystems.agent.android:agent-android-*` and instrumentations `com.vunetsystems.agent.android.instrumentation:<artifact>`. Six modules are built but not published: `android-log-agent`, `android-log-library`, `compose-click`, `okhttp3-websocket-agent`, `okhttp3-websocket-library`, `view-click` (nothing in the SDK uses them).
+
+Repository: [Maven Central](https://central.sonatype.com/artifact/com.vunetsystems.agent.android/agent-android-runtime)
+
+The [vuTelemetry-android](https://github.com/vunetsystems/vutelemetry-android) SDK and Gradle plugin
+should pin the same BOM version when building against this fork.
+
+### How the version string is built
+
+Configured in root `gradle.properties`:
+
+| Property | Value | Effect |
+|----------|-------|--------|
+| `version` | `0.0.1` | Base semver |
+| `otel.publish.alpha` | `false` | Does **not** append `-alpha` (all modules share one version) |
+| `final` (Gradle property) | unset | Appends `-SNAPSHOT` |
+
+Default publish result: **`0.0.1-SNAPSHOT`**.
+
+Release build: publish with `-Pfinal=true` → **`0.0.1`** for all modules.
+
+### CI publish triggers
+
+| Branch event | Published version |
+|--------------|-------------------|
+| PR merged to `develop` | `0.0.1-SNAPSHOT` |
+| push to `release/*` | `0.0.1` (must be greater than latest on Central) |
+
+### Bumping versions
+
+1. Update `version` in `gradle.properties` (e.g. `0.0.2`).
+2. Merge to `develop` for snapshots, or `release/*` for releases.
+3. Update the matching BOM version in vuTelemetry-android.
+
+### Resource version attributes (VuNet integration)
+
+This fork no longer exports the standard OpenTelemetry `telemetry.sdk.language`,
+`telemetry.sdk.name`, or `telemetry.sdk.version` resource attributes. `AndroidResource`
+builds resources without merging `Resource.getDefault()`, which is where those attributes
+originate. Instead, the
+[vuTelemetry-android](https://github.com/vunetsystems/vutelemetry-android) Gradle plugin and SDK
+contribute the following **resource** attributes via the existing `resource { }` DSL in
+`OpenTelemetryRumInitializer.initialize`:
+
+| Resource attribute | Source |
+|--------------------|--------|
+| `vunet.opentelemetry.version` | Resolved `opentelemetry-android-bom` version on the consumer classpath |
+| `vunet.gradle.plugin.version` | `vunet.telemetry.android` Gradle plugin version |
+| `vunet.sdk.version` | vuTelemetry SDK artifact version |
+
+These attributes flow to traces, logs and metrics on every export as part of the OTel resource.
+
+#### vuTelemetry-android implementation contract
+
+The Gradle plugin should generate a Kotlin source file (e.g. `VunetBuildInfo.kt`) into the SDK
+module's generated sources:
+
+```kotlin
+internal object VunetBuildInfo {
+    const val OPENTELEMETRY_VERSION = "<resolved BOM version>"
+    const val GRADLE_PLUGIN_VERSION = "<plugin version>"
+    const val SDK_VERSION = "<sdk version>"
+}
+```
+
+`VunetAutoInitProvider` should contribute the attributes at init time:
+
+```kotlin
+OpenTelemetryRumInitializer.initialize(ctx) {
+    resource {
+        put("vunet.opentelemetry.version", VunetBuildInfo.OPENTELEMETRY_VERSION)
+        put("vunet.gradle.plugin.version", VunetBuildInfo.GRADLE_PLUGIN_VERSION)
+        put("vunet.sdk.version", VunetBuildInfo.SDK_VERSION)
+    }
+}
+```
 
 ## Versioning scheme
 
@@ -16,9 +108,8 @@ a regular release.
 
 ## Snapshot builds
 
-Every commit to the `main` branch will cause a
-[snapshot build](https://central.sonatype.com/service/rest/repository/browse/maven-snapshots/io/opentelemetry/android/)
-to be published to Sonatype. Users may choose to build and test and file issues against SNAPSHOT
+Snapshot builds are published to Maven Central when PRs merge to `develop`.
+Users may choose to build and test and file issues against SNAPSHOT
 builds, but their use in production is strongly discouraged.
 
 ## Android ecosystem compatibility

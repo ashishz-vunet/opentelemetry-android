@@ -8,10 +8,12 @@ package io.opentelemetry.android
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
+import androidx.annotation.VisibleForTesting
+import io.opentelemetry.android.common.RumConstants.APP_FRAMEWORK_KEY
+import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.sdk.resources.Resource
 import io.opentelemetry.semconv.ServiceAttributes.SERVICE_NAME
 import io.opentelemetry.semconv.ServiceAttributes.SERVICE_VERSION
-import io.opentelemetry.semconv.TelemetryAttributes.TELEMETRY_SDK_VERSION
 import io.opentelemetry.semconv.incubating.AndroidIncubatingAttributes.ANDROID_OS_API_LEVEL
 import io.opentelemetry.semconv.incubating.AppIncubatingAttributes.APP_INSTALLATION_ID
 import io.opentelemetry.semconv.incubating.DeviceIncubatingAttributes.DEVICE_MANUFACTURER
@@ -26,17 +28,57 @@ import java.util.UUID
 private const val SHARED_PREF_FILE = "opentelemetry-android"
 private const val DEFAULT_APP_NAME = "unknown_service:android"
 
+private const val FRAMEWORK_FLUTTER = "flutter"
+private const val FRAMEWORK_REACT_NATIVE = "react_native"
+private const val FRAMEWORK_NATIVE = "native_android"
+
+/**
+ * Marker classes that, when present on the classpath, identify a cross-platform shell. Ordered by
+ * priority; the first present marker wins. Falls back to [FRAMEWORK_NATIVE] when none resolve.
+ *
+ * React Native is matched primarily on `ReactApplication`, a core interface that is stable across
+ * the legacy bridge and the new (Fabric/bridgeless) architecture; `ReactRootView` is kept as a
+ * secondary marker for older RN versions where the primary one may be absent.
+ */
+private val FRAMEWORK_MARKERS: List<Pair<String, String>> =
+    listOf(
+        "io.flutter.embedding.engine.FlutterEngine" to FRAMEWORK_FLUTTER,
+        "com.facebook.react.ReactApplication" to FRAMEWORK_REACT_NATIVE,
+        "com.facebook.react.ReactRootView" to FRAMEWORK_REACT_NATIVE,
+    )
+
 object AndroidResource {
+    /**
+     * Total device RAM in bytes. Not an OTel semconv key — matches the wire-key string
+     * `instrumentation/system-metrics` used to emit as an `app.metrics` span attribute before that
+     * value moved to the resource, so existing queries on the key name are unaffected; only its
+     * OTLP location changed.
+     */
+    @JvmField
+    val SYSTEM_MEMORY_TOTAL: AttributeKey<Long> = AttributeKey.longKey("system.memory.total")
+
+    /** Total disk space of the internal data partition in bytes. Same rename history as above. */
+    @JvmField
+    val SYSTEM_DISK_TOTAL: AttributeKey<Long> = AttributeKey.longKey("system.disk.total")
+
     @JvmStatic
-    fun createDefault(context: Context): Resource {
+    fun createDefault(context: Context): Resource = createDefault(context, DefaultDeviceCapacityReader)
+
+    /**
+     * [deviceCapacityReader] is injectable only so tests can supply deterministic values; it is
+     * deliberately kept off the published API, the same shape as [resolveAppFramework].
+     */
+    @VisibleForTesting
+    internal fun createDefault(
+        context: Context,
+        deviceCapacityReader: DeviceCapacityReader,
+    ): Resource {
         val appName = readAppName(context)
-        val resourceBuilder =
-            Resource.getDefault().toBuilder().put(SERVICE_NAME, appName)
+        val resourceBuilder = Resource.builder().put(SERVICE_NAME, appName)
         val appVersion = readAppVersion(context)
         appVersion?.let { resourceBuilder.put(SERVICE_VERSION, it) }
 
-        return resourceBuilder
-            .put(TELEMETRY_SDK_VERSION, BuildConfig.OTEL_ANDROID_VERSION)
+        resourceBuilder
             .put(DEVICE_MODEL_NAME, Build.MODEL)
             .put(DEVICE_MODEL_IDENTIFIER, Build.MODEL)
             .put(DEVICE_MANUFACTURER, Build.MANUFACTURER)
@@ -46,8 +88,62 @@ object AndroidResource {
             .put(OS_VERSION, Build.VERSION.RELEASE)
             .put(OS_DESCRIPTION, oSDescription)
             .put(APP_INSTALLATION_ID, readInstallId(context))
-            .build()
+            .put(APP_FRAMEWORK_KEY, appFramework)
+
+        // Omitted rather than reported as a sentinel when unreadable. The resource is immutable for
+        // the life of the process, so a transient StatFs/getMemoryInfo failure would otherwise pin
+        // a bogus value onto every log and metric until the app restarts — the same reason
+        // service.version is skipped above when the version cannot be read.
+        deviceCapacityReader.readTotalRamBytes(context).takeIf { it >= 0 }?.let {
+            resourceBuilder.put(SYSTEM_MEMORY_TOTAL, it)
+        }
+        deviceCapacityReader.readTotalDiskBytes().takeIf { it >= 0 }?.let {
+            resourceBuilder.put(SYSTEM_DISK_TOTAL, it)
+        }
+
+        return resourceBuilder.build()
     }
+
+    /**
+     * Host app framework, resolved once per process. The classpath is fixed for the process
+     * lifetime, so the marker-class probes are memoized; the agent builds the default resource more
+     * than once during init, and this keeps every build after the first lookup-free.
+     */
+    private val appFramework: String by lazy { resolveAppFramework() }
+
+    /**
+     * Resolves the framework by probing for marker classes, returning the first match in priority
+     * order. Falls back to [FRAMEWORK_NATIVE] when no cross-platform marker resolves. The
+     * [isPresent] probe is injectable so all branches can be exercised without the real classpath.
+     */
+    @VisibleForTesting
+    internal fun resolveAppFramework(isPresent: (String) -> Boolean = ::isClassPresent): String {
+        for ((className, framework) in FRAMEWORK_MARKERS) {
+            if (isPresent(className)) {
+                return framework
+            }
+        }
+        return FRAMEWORK_NATIVE
+    }
+
+    private fun isClassPresent(className: String): Boolean =
+        try {
+            Class.forName(className, false, AndroidResource::class.java.classLoader)
+            true
+        } catch (_: Throwable) {
+            // Throwable (not Exception) on purpose: a present marker with missing transitive deps
+            // surfaces as NoClassDefFoundError/LinkageError, which are Errors, not Exceptions.
+            false
+        }
+
+    /**
+     * Resource holding only `service.name`. No longer used by the SDK: trace spans now carry the
+     * full resource on every export, like logs and metrics.
+     */
+    @Deprecated("Trace spans carry the full resource; use createDefault(context).")
+    @JvmStatic
+    fun createMinimal(context: Context): Resource =
+        Resource.builder().put(SERVICE_NAME, readAppName(context)).build()
 
     @SuppressLint("UseKtx")
     private fun readInstallId(context: Context): String {

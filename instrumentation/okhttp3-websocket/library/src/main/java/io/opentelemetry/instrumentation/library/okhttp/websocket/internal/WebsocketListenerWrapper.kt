@@ -5,6 +5,7 @@
 
 package io.opentelemetry.instrumentation.library.okhttp.websocket.internal
 
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
@@ -96,6 +97,7 @@ class WebsocketListenerWrapper(
         eventName: String,
         attributes: Attributes,
     ) {
+        RumDiagnostics.d { "okhttpWs: event=$eventName" }
         logger
             .logRecordBuilder()
             .setEventName(eventName)

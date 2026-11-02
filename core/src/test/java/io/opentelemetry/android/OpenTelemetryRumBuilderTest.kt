@@ -17,6 +17,7 @@ import io.mockk.impl.annotations.MockK
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import io.opentelemetry.android.common.RumConstants
 import io.opentelemetry.android.common.RumConstants.SCREEN_NAME_KEY
 import io.opentelemetry.android.config.OtelRumConfig
 import io.opentelemetry.android.features.diskbuffering.DiskBufferingConfig
@@ -36,6 +37,10 @@ import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.logs.Severity
+import io.opentelemetry.api.trace.SpanContext
+import io.opentelemetry.api.trace.SpanKind
+import io.opentelemetry.api.trace.TraceFlags
+import io.opentelemetry.api.trace.TraceState
 import io.opentelemetry.context.propagation.TextMapGetter
 import io.opentelemetry.context.propagation.TextMapPropagator
 import io.opentelemetry.contrib.disk.buffering.exporters.SpanToDiskExporter
@@ -60,7 +65,9 @@ import io.opentelemetry.sdk.testing.exporter.InMemoryLogRecordExporter
 import io.opentelemetry.sdk.testing.exporter.InMemoryMetricExporter
 import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter
+import io.opentelemetry.sdk.testing.trace.TestSpanData
 import io.opentelemetry.sdk.trace.SdkTracerProviderBuilder
+import io.opentelemetry.sdk.trace.data.StatusData
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 import io.opentelemetry.sdk.trace.export.SpanExporter
 import io.opentelemetry.semconv.incubating.SessionIncubatingAttributes
@@ -120,6 +127,8 @@ class OpenTelemetryRumBuilderTest {
         resetForTesting()
         InitializationEvents.resetForTest()
         set(null)
+        AppStartSpans.clear()
+        BridgedSpans.clear()
     }
 
     @Test
@@ -163,6 +172,74 @@ class OpenTelemetryRumBuilderTest {
                         ),
                     )
             }
+    }
+
+    @Test
+    fun publishesAppStartSpanThroughRegisteredTracker() {
+        createAndSetServiceManager()
+        val rum = makeBuilder().setResource(resource).build()
+
+        val span =
+            rum.openTelemetry
+                .getTracer("test")
+                .spanBuilder(RumConstants.APP_START_SPAN_NAME)
+                .startSpan()
+
+        assertThat(AppStartSpans.current?.spanContext).isEqualTo(span.spanContext)
+
+        span.end()
+
+        assertThat(AppStartSpans.current).isNull()
+    }
+
+    @Test
+    fun bridgedSpansLeaveThroughTheSpanExporterWithTheRumResource() {
+        // Bridged spans never touch Context on this thread, so the batch worker would be the
+        // first to load ContextStorage — through the wrong classloader under Robolectric, which
+        // breaks every later test in the class. Load it here first, as a live span would.
+        io.opentelemetry.context.Context.current()
+        val services = createAndSetServiceManager()
+        every { services.close() } returns Unit
+        val rum =
+            makeBuilder()
+                .setResource(resource)
+                .addSpanExporterCustomizer { spanExporter }
+                .build()
+        val bridged =
+            TestSpanData
+                .builder()
+                .setName("ui.navigation")
+                .setKind(SpanKind.INTERNAL)
+                .setSpanContext(
+                    SpanContext.create(
+                        "0123456789abcdef0123456789abcdef",
+                        "0123456789abcdef",
+                        TraceFlags.getSampled(),
+                        TraceState.getDefault(),
+                    ),
+                ).setStatus(StatusData.unset())
+                .setHasEnded(true)
+                .setStartEpochNanos(1_000)
+                .setEndEpochNanos(5_000)
+                .build()
+
+        assertThat(BridgedSpans.export(listOf(bridged))).isTrue()
+
+        Awaitility
+            .await()
+            .atMost(Duration.ofSeconds(10))
+            .untilAsserted {
+                BridgedSpans.forceFlush()
+                assertThat(spanExporter.finishedSpanItems).hasSize(1)
+                val exported = spanExporter.finishedSpanItems[0]
+                assertThat(exported.spanContext).isEqualTo(bridged.spanContext)
+                assertThat(exported.resource).isEqualTo(resource)
+            }
+
+        // Shutting the RUM instance down unpublishes it: wrappers get `false` instead of
+        // feeding a processor that no longer exports.
+        rum.shutdown()
+        assertThat(BridgedSpans.export(listOf(bridged))).isFalse()
     }
 
     @Test

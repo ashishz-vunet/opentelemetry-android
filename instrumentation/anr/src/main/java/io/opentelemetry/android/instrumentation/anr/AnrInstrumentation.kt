@@ -10,6 +10,7 @@ import android.os.Looper
 import androidx.annotation.VisibleForTesting
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.android.instrumentation.common.EventAttributesExtractor
 import io.opentelemetry.android.internal.services.Services.Companion.get
@@ -24,7 +25,13 @@ class AnrInstrumentation : AndroidInstrumentation {
     private var mainLooper: Looper = Looper.getMainLooper()
     private var scheduler: ScheduledExecutorService = Executors.newScheduledThreadPool(1)
 
-    /** Adds an [EventAttributesExtractor] that will extract additional attributes.  */
+    /**
+     * Adds an [EventAttributesExtractor] that will extract additional attributes.
+     *
+     * Extractors run after the built-in attributes and may replace `error.runtime` or
+     * `exception.type`. That is the supported in-process override for a wrapper that still reports
+     * through this instrumentation (this SDK otherwise always stamps `jvm` / `ANR`).
+     */
     fun addAttributesExtractor(extractor: EventAttributesExtractor<Array<StackTraceElement>>): AnrInstrumentation {
         additionalExtractors.add(extractor)
         return this
@@ -52,6 +59,7 @@ class AnrInstrumentation : AndroidInstrumentation {
                 get(context).appLifecycle,
                 openTelemetryRum.openTelemetry,
             )
+        RumDiagnostics.d { "anr: watchdog install" }
         anrDetector.start()
     }
 

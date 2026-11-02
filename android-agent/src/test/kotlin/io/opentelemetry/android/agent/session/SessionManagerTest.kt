@@ -309,6 +309,66 @@ internal class SessionManagerTest {
     }
 
     @Test
+    fun `endSession rotates to a new session id immediately`() {
+        val clock = TestClock.create()
+        val sessionManager =
+            SessionManager(
+                clock,
+                timeoutHandler = timeoutHandler,
+                maxSessionLifetime = MAX_SESSION_LIFETIME.hours,
+            )
+        val firstSessionId = sessionManager.getSessionId()
+
+        sessionManager.endSession()
+        val secondSessionId = sessionManager.getSessionId()
+
+        assertThat(secondSessionId).isNotEqualTo(firstSessionId)
+        assertThat(secondSessionId).hasSize(SESSION_ID_LENGTH)
+    }
+
+    @Test
+    fun `endSession notifies observers of session end and start`() {
+        val clock = TestClock.create()
+        val observer = mockk<SessionObserver>()
+        every { observer.onSessionStarted(any<Session>(), any<Session>()) } just Runs
+        every { observer.onSessionEnded(any<Session>()) } just Runs
+
+        val sessionManager =
+            SessionManager(
+                clock,
+                timeoutHandler = timeoutHandler,
+                maxSessionLifetime = MAX_SESSION_LIFETIME.hours,
+            )
+        sessionManager.addObserver(observer)
+        val firstSessionId = sessionManager.getSessionId()
+
+        sessionManager.endSession()
+
+        verify {
+            observer.onSessionEnded(match { it.id == firstSessionId })
+            observer.onSessionStarted(match { it.id != firstSessionId }, match { it.id == firstSessionId })
+        }
+    }
+
+    @Test
+    fun `consecutive endSession calls yield distinct session ids`() {
+        val sessionManager =
+            SessionManager(
+                TestClock.create(),
+                timeoutHandler = timeoutHandler,
+                maxSessionLifetime = MAX_SESSION_LIFETIME.hours,
+            )
+        sessionManager.getSessionId()
+
+        sessionManager.endSession()
+        val firstRotation = sessionManager.getSessionId()
+        sessionManager.endSession()
+        val secondRotation = sessionManager.getSessionId()
+
+        assertThat(firstRotation).isNotEqualTo(secondRotation)
+    }
+
+    @Test
     fun `session expiration check uses correct session instance`() {
         // Given
         val clock = TestClock.create()

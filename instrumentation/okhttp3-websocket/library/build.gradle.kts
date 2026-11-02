@@ -1,6 +1,5 @@
 plugins {
     id("otel.android-library-conventions")
-    id("otel.publish-conventions")
 }
 
 description = "OpenTelemetry OkHttp Websocket library instrumentation for Android"
@@ -15,6 +14,7 @@ android {
 
 dependencies {
     api(platform(libs.opentelemetry.platform.alpha)) // Required for sonatype publishing
+    implementation(project(":common"))
     implementation(project(":agent-api"))
     implementation(project(":instrumentation:android-instrumentation"))
     compileOnly(libs.okhttp)

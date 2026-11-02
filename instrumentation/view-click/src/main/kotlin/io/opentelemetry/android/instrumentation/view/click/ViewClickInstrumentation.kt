@@ -9,6 +9,7 @@ import android.app.Application
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 
 @AutoService(AndroidInstrumentation::class)
@@ -16,6 +17,7 @@ class ViewClickInstrumentation : AndroidInstrumentation {
     override val name: String = "view.click"
 
     override fun install(context: Context, openTelemetryRum: OpenTelemetryRum) {
+        RumDiagnostics.d { "viewClick: install" }
         (context as? Application)?.registerActivityLifecycleCallbacks(
             ViewClickActivityCallback(
                 ViewClickEventGenerator(

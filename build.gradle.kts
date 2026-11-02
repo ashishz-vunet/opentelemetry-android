@@ -18,6 +18,10 @@ plugins {
     id("org.jetbrains.kotlinx.kover")
 }
 
+if (findProperty("final") != "true") {
+    version = "$version-SNAPSHOT"
+}
+
 extra["java_version"] = JavaVersion.VERSION_1_8
 extra["jvm_target"] = JvmTarget.JVM_1_8
 extra["kotlin_min_supported_version"] = KotlinVersion.KOTLIN_2_0

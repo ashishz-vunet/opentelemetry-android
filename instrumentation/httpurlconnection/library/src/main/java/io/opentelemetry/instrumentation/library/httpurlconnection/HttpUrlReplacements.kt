@@ -9,10 +9,15 @@ import android.os.Build
 import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import io.opentelemetry.context.Context
+import io.opentelemetry.android.common.internal.instrumentation.ActiveInteractionContext
 import io.opentelemetry.instrumentation.api.instrumenter.Instrumenter
+import io.opentelemetry.instrumentation.library.httpurlconnection.internal.HttpUrlConnectionSingletons.captureNetworkTiming
 import io.opentelemetry.instrumentation.library.httpurlconnection.internal.HttpUrlConnectionSingletons.instrumenter
 import io.opentelemetry.instrumentation.library.httpurlconnection.internal.HttpUrlConnectionSingletons.openTelemetryInstance
+import io.opentelemetry.instrumentation.library.httpurlconnection.internal.HttpUrlConnectionTiming
+import io.opentelemetry.instrumentation.library.httpurlconnection.internal.HttpUrlTimingSpanEnricher
 import io.opentelemetry.instrumentation.library.httpurlconnection.internal.RequestPropertySetter
+import io.opentelemetry.api.trace.Span
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -41,6 +46,7 @@ object HttpUrlReplacements {
             reportWithResponseCode(connection)
         }
 
+        HttpUrlConnectionTiming.remove(connection)
         connection.disconnect()
     }
 
@@ -282,8 +288,28 @@ object HttpUrlReplacements {
         connection: URLConnection,
         exception: IOException,
     ) {
-        endTracing(connection, UNKNOWN_RESPONSE_CODE, exception)
+        endTracing(connection, responseCodeOrUnknown(connection), exception)
     }
+
+    /**
+     * The response code the connection already holds, or [UNKNOWN_RESPONSE_CODE] when there is
+     * none.
+     *
+     * A throwable does not imply the server never answered. `HttpURLConnection.getInputStream()`
+     * raises `FileNotFoundException` for *every* response `>= 400`, and a body read can fail long
+     * after a 200. Reporting the `-1` sentinel on those paths discarded a status code the
+     * connection already knew, leaving a real 404 with no status at all.
+     *
+     * When the request genuinely never reached a server this re-throws the original failure
+     * internally and yields [UNKNOWN_RESPONSE_CODE], so those spans are unaffected.
+     */
+    private fun responseCodeOrUnknown(connection: URLConnection): Int =
+        try {
+            (connection as? HttpURLConnection)?.responseCode ?: UNKNOWN_RESPONSE_CODE
+        } catch (exception: IOException) {
+            logger.log(Level.FINE, "No response code available for failed connection", exception)
+            UNKNOWN_RESPONSE_CODE
+        }
 
     private fun reportWithResponseCode(connection: HttpURLConnection) {
         try {
@@ -309,14 +335,21 @@ object HttpUrlReplacements {
         val info = activeURLConnections[connection]
         if (info != null && !info.reported) {
             val context = info.context
+            if (captureNetworkTiming) {
+                HttpUrlTimingSpanEnricher.enrich(Span.fromContext(context), connection)
+            } else {
+                HttpUrlConnectionTiming.remove(connection)
+            }
             httpURLInstrumenter?.end(context, connection, responseCode, error)
             info.reported = true
             activeURLConnections.remove(connection)
+        } else {
+            HttpUrlConnectionTiming.remove(connection)
         }
     }
 
     private fun startTracingAtFirstConnection(connection: URLConnection) {
-        val parentContext = Context.current()
+        val parentContext = ActiveInteractionContext.parentContextOr(Context.current())
         val instrument = instrumenter()
         httpURLInstrumenter = instrument
         if (!instrument.shouldStart(parentContext, connection)) {
@@ -326,6 +359,9 @@ object HttpUrlReplacements {
         if (!activeURLConnections.containsKey(connection)) {
             val context = httpURLInstrumenter?.start(parentContext, connection) ?: return
             activeURLConnections[connection] = HttpURLConnectionInfo(context)
+            if (captureNetworkTiming) {
+                HttpUrlConnectionTiming.start(connection)
+            }
             try {
                 injectContextToRequest(connection, context)
             } catch (exception: Exception) {

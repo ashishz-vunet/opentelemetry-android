@@ -8,12 +8,14 @@ package io.opentelemetry.instrumentation.library.log
 import android.content.Context
 import com.google.auto.service.AutoService
 import io.opentelemetry.android.OpenTelemetryRum
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.android.instrumentation.AndroidInstrumentation
 import io.opentelemetry.instrumentation.library.log.internal.LogRecordBuilderCreator.configure
 
 @AutoService(AndroidInstrumentation::class)
 class AndroidLogInstrumentation : AndroidInstrumentation {
     override fun install(context: Context, openTelemetryRum: OpenTelemetryRum) {
+        RumDiagnostics.d { "androidLog: substitution install" }
         configure(openTelemetryRum.openTelemetry)
     }
 

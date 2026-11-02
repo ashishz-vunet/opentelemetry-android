@@ -6,6 +6,17 @@ permissions:
   contents: read
 
 jobs:
+  # Version fits the PR's base branch and is not on Maven Central yet (see .github/scripts/preflight.sh).
+  preflight:
+    name: "preflight"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Preflight script self-check
+        run: bash .github/scripts/test-preflight.sh
+      - name: Preflight
+        run: bash .github/scripts/preflight.sh
+
   pr-checks:
     name: "pr-checks"
     runs-on: ubuntu-latest
@@ -34,10 +45,11 @@ jobs:
 
   required-status-check:
     needs:
+      - preflight
       - pr-checks
     runs-on: ubuntu-latest
     if: always()
     steps:
       - if: |
-          needs.pr-checks.result != 'success'
+          needs.preflight.result != 'success' || needs.pr-checks.result != 'success'
         run: exit 1

@@ -122,7 +122,9 @@ The following instrumentation modules are bundled with the Android Agent:
 
 There are also other
 [additional instrumentation modules](https://github.com/open-telemetry/opentelemetry-android/tree/main/instrumentation)
-that application developers can include through a gradle dependency. 
+that application developers can include through a gradle dependency.
+For hybrid apps, see [Hybrid click](./instrumentation/hybrid-click/) to capture both
+View and Jetpack Compose click interactions as a standalone module.
 Instrumentations are detected at runtime via the classpath, and
 are installed automatically.
 
@@ -133,6 +135,7 @@ See the following pages for details about the related topics:
 - [Kotlin-First Policy](./docs/KOTLIN_FIRST.md)
 - [StrictMode Guidance](./docs/STRICTMODE.md)
 - [Exporter Management](./docs/EXPORTER_CHAIN.md)
+- [Maven Central publishing and consumption](./docs/MAVEN_CENTRAL.md)
 
 # Contributing
 
@@ -170,6 +173,6 @@ For more information about the Approver role, see the [community repository](htt
 
 [ci-url]: https://github.com/open-telemetry/opentelemetry-android/actions?query=workflow%3Abuild+branch%3Amain
 
-[maven-image]: https://img.shields.io/maven-central/v/io.opentelemetry.android/android-agent.svg
+[maven-image]: https://img.shields.io/maven-central/v/com.vunetsystems.agent.android/agent-android-runtime.svg
 
-[maven-url]: https://central.sonatype.com/artifact/io.opentelemetry.android/android-agent
+[maven-url]: https://central.sonatype.com/artifact/com.vunetsystems.agent.android/agent-android-runtime

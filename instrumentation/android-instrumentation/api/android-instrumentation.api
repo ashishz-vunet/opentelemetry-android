@@ -4,3 +4,15 @@ public abstract interface class io/opentelemetry/android/instrumentation/Android
 	public fun uninstall (Landroid/content/Context;Lio/opentelemetry/android/OpenTelemetryRum;)V
 }
 
+public abstract interface class io/opentelemetry/android/instrumentation/ConfigurableHybridClickInstrumentation {
+	public abstract fun setActiveContextWindowMillis (J)V
+}
+
+public abstract interface class io/opentelemetry/android/instrumentation/ConfigurableSystemMetricsInstrumentation {
+	public abstract fun setCollectionIntervalSeconds (J)V
+}
+
+public abstract interface class io/opentelemetry/android/instrumentation/ConfigurableWebViewInstrumentation {
+	public abstract fun setAllowedHosts (Ljava/util/Set;)V
+}
+

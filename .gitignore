@@ -5,3 +5,16 @@ demo-app/local.properties
 .DS_Store
 **/build/
 .kotlin/
+.vscode/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Local editor / agent tooling — not published with the SDK
+.claude/
+.cursor/
+.mcp.json
+.ignore
+
+# Local SID notes
+/docs/sid/

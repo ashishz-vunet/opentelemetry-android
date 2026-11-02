@@ -23,6 +23,9 @@ internal object HttpUrlConnectionSingletons {
     private lateinit var instrumenter: Instrumenter<URLConnection, Int>
     private lateinit var openTelemetryInstance: OpenTelemetry
 
+    @JvmField
+    var captureNetworkTiming: Boolean = true
+
     fun configure(
         instrumentation: HttpUrlInstrumentation,
         openTelemetry: OpenTelemetry,
@@ -61,6 +64,16 @@ internal object HttpUrlConnectionSingletons {
                     HttpSpanStatusExtractor.create(httpAttributesGetter),
                 ).addAttributesExtractor(httpClientAttributesExtractorBuilder.build())
                 .addAttributesExtractor(httpClientPeerServiceAttributesExtractor)
+                .addAttributesExtractor(HttpUrlErrorCategoryAttributesExtractor)
+                // Complements the HTTP attributes extractor above, which skips the status code
+                // when it is not positive, leaving failed requests with no status at all.
+                // Registration order is not significant: the two write under mutually exclusive
+                // conditions (a positive response code vs none), so they never both fire.
+                .addAttributesExtractor(HttpUrlNoResponseStatusCodeAttributesExtractor)
+                // Also complements it: that extractor records url.full and never splits it.
+                // Writes disjoint keys (url.scheme/path/query), so it cannot conflict with
+                // anything registered above.
+                .addAttributesExtractor(HttpUrlUrlPartsAttributesExtractor)
                 .addOperationMetrics(HttpClientMetrics.get())
 
         for (extractor in instrumentation.getAdditionalExtractors()) {
@@ -74,6 +87,7 @@ internal object HttpUrlConnectionSingletons {
                 ).addOperationMetrics(HttpClientExperimentalMetrics.get())
         }
 
+        captureNetworkTiming = instrumentation.captureNetworkTiming()
         instrumenter = builder.buildClientInstrumenter(RequestPropertySetter)
     }
 

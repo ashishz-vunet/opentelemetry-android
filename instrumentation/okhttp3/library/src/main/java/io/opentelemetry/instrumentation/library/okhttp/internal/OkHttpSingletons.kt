@@ -5,6 +5,9 @@
 
 package io.opentelemetry.instrumentation.library.okhttp.internal
 
+import android.util.Log
+import io.opentelemetry.android.common.RumConstants
+import io.opentelemetry.android.common.RumDiagnostics
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.context.Context
 import io.opentelemetry.instrumentation.api.incubator.semconv.http.HttpClientServicePeerAttributesExtractor
@@ -15,8 +18,12 @@ import io.opentelemetry.instrumentation.okhttp.v3_0.internal.ConnectionErrorSpan
 import io.opentelemetry.instrumentation.okhttp.v3_0.internal.OkHttpAttributesGetter
 import io.opentelemetry.instrumentation.okhttp.v3_0.internal.OkHttpClientInstrumenterBuilderFactory
 import io.opentelemetry.instrumentation.okhttp.v3_0.internal.TracingInterceptor
+import java.lang.reflect.Field
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.UnaryOperator
+import okhttp3.EventListener
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 
 /**
  * This class is internal and is hence not for public use. Its APIs are unstable and can change at
@@ -28,12 +35,79 @@ object OkHttpSingletons {
             chain.proceed(chain.request())
         }
     private val ATTRIBUTES_GETTER = OkHttpAttributesGetter()
+    private val timingSpanEnricher = OkHttpTimingSpanEnricher()
 
     @JvmField
     var connectionErrorInterceptor: Interceptor = NOOP_INTERCEPTOR
 
     @JvmField
     var tracingInterceptor: Interceptor = NOOP_INTERCEPTOR
+
+    @JvmField
+    var captureNetworkTimingPhases: Boolean = true
+
+    private val eventListenerFactoryWarningLogged = AtomicBoolean(false)
+
+    /**
+     * Set when the reflective `eventListenerFactory` lookup failed, which happens in minified
+     * builds where R8 renames the private field. Failure is process-wide -- the field is either
+     * present for every `OkHttpClient.Builder` or for none -- so this is sticky: later builders
+     * skip wrapping rather than retrying a lookup that cannot succeed.
+     *
+     * This is not merely a loss of `http.client.timing.*` attributes. Since completion moved to
+     * the `EventListener`, that listener is the only thing that ends an OkHttp span, so without it
+     * spans would be started and never ended at all. [TimingTracingInterceptor] reads this to fall
+     * back to ending inline.
+     */
+    @Volatile
+    internal var eventListenerWiringFailed: Boolean = false
+
+    @JvmStatic
+    fun wrapEventListenerFactory(delegate: EventListener.Factory): EventListener.Factory =
+        OkHttpTimingEventListenerFactory.wrap(delegate)
+
+    /**
+     * Called from woven [io.opentelemetry.instrumentation.library.okhttp.OkHttpClientAdvice].
+     * Must remain public so OkHttp bytecode can invoke it after Byte Buddy weaving.
+     */
+    @JvmStatic
+    fun applyClientInstrumentation(builder: OkHttpClient.Builder) {
+        if (!builder.interceptors().contains(CALLBACK_CONTEXT_INTERCEPTOR)) {
+            builder.interceptors().add(0, CALLBACK_CONTEXT_INTERCEPTOR)
+            builder.interceptors().add(1, RESEND_COUNT_CONTEXT_INTERCEPTOR)
+            builder.interceptors().add(2, connectionErrorInterceptor)
+        }
+        if (!builder.networkInterceptors().contains(tracingInterceptor)) {
+            builder.addNetworkInterceptor(tracingInterceptor)
+        }
+        if (captureNetworkTimingPhases && !eventListenerWiringFailed) {
+            wrapEventListenerFactoryOnBuilder(builder)
+        }
+    }
+
+    @JvmStatic
+    private fun wrapEventListenerFactoryOnBuilder(builder: OkHttpClient.Builder) {
+        try {
+            val eventListenerFactoryField: Field =
+                builder.javaClass.getDeclaredField("eventListenerFactory")
+            eventListenerFactoryField.isAccessible = true
+            val existingFactory = eventListenerFactoryField.get(builder) as EventListener.Factory
+            val wrappedFactory = wrapEventListenerFactory(existingFactory)
+            if (wrappedFactory !== existingFactory) {
+                eventListenerFactoryField.set(builder, wrappedFactory)
+            }
+        } catch (exception: ReflectiveOperationException) {
+            eventListenerWiringFailed = true
+            if (eventListenerFactoryWarningLogged.compareAndSet(false, true)) {
+                Log.w(
+                    RumConstants.OTEL_RUM_LOG_TAG,
+                    "Failed to wire OkHttp timing EventListener factory; network phase timing " +
+                        "disabled and http.client spans will be ended inline",
+                    exception,
+                )
+            }
+        }
+    }
 
     fun configure(
         instrumentation: OkHttpInstrumentation,
@@ -61,6 +135,19 @@ object OkHttpSingletons {
                         ATTRIBUTES_GETTER,
                         openTelemetry,
                     ),
+                ).addAttributesExtractor(
+                    OkHttpErrorCategoryAttributesExtractor,
+                ).addAttributesExtractor(
+                    // Complements the built-in HTTP attributes extractor, which skips the status
+                    // code when it is not positive, leaving failed calls with no status at all.
+                    // Registration order is not significant: the two write under mutually
+                    // exclusive conditions (a real response vs none), so they never both fire.
+                    OkHttpNoResponseStatusCodeAttributesExtractor,
+                ).addAttributesExtractor(
+                    // Also complements the built-in extractor, which records url.full and never
+                    // splits it. Writes disjoint keys (url.scheme/path/query), so it cannot
+                    // conflict with anything registered above.
+                    OkHttpUrlPartsAttributesExtractor,
                 ).setEmitExperimentalHttpClientTelemetry(
                     instrumentation.emitExperimentalHttpClientTelemetry(),
                 )
@@ -72,7 +159,28 @@ object OkHttpSingletons {
         val instrumenter = instrumenterBuilder.build()
 
         connectionErrorInterceptor = ConnectionErrorSpanInterceptor(instrumenter)
-        tracingInterceptor = TracingInterceptor(instrumenter, openTelemetry.propagators)
+        val tracing =
+            if (instrumentation.captureNetworkTimingPhases()) {
+                OkHttpCallCompletionCoordinator.configure(
+                    instrumenter,
+                    timingSpanEnricher,
+                    instrumentation.maxCallDurationMillis(),
+                )
+                TimingTracingInterceptor(instrumenter, openTelemetry.propagators)
+            } else {
+                TracingInterceptor(instrumenter, openTelemetry.propagators)
+            }
+        captureNetworkTimingPhases = instrumentation.captureNetworkTimingPhases()
+        tracingInterceptor =
+            Interceptor { chain ->
+                val request = chain.request()
+                RumDiagnostics.d { "okhttp: request method=${request.method} host=${request.url.host}" }
+                val response = tracing.intercept(chain)
+                RumDiagnostics.d {
+                    "okhttp: response code=${response.code} method=${request.method} host=${request.url.host}"
+                }
+                response
+            }
     }
 
     @JvmField

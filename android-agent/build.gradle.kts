@@ -22,13 +22,20 @@ dependencies {
     // Default instrumentations:
     implementation(project(":instrumentation:activity"))
     implementation(project(":instrumentation:anr"))
+    implementation(project(":instrumentation:applifecycle"))
     implementation(project(":instrumentation:crash"))
     implementation(project(":instrumentation:fragment"))
     implementation(project(":instrumentation:network"))
     implementation(project(":instrumentation:slowrendering"))
-    implementation(project(":instrumentation:startup"))
+    implementation(project(":instrumentation:startup:library"))
     implementation(project(":instrumentation:sessions"))
     implementation(project(":instrumentation:screen-orientation"))
+    implementation(project(":instrumentation:hybrid-click"))
+    implementation(project(":instrumentation:concurrency:library"))
+
+    // Opt-in image-loading instrumentations (compileOnly — only active when consumer depends on them):
+    compileOnly(project(":instrumentation:glide"))
+    compileOnly(project(":instrumentation:coil"))
 
     testImplementation(libs.opentelemetry.semconv)
     testImplementation(libs.opentelemetry.semconv.incubating)
